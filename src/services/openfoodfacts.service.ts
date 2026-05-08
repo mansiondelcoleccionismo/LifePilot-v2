@@ -11,10 +11,12 @@ export interface OpenFoodResult {
 }
 
 export async function searchFoods(query: string): Promise<OpenFoodResult[]> {
+  // No cc/lc filters — maximiza resultados; fields= reduce el payload
   const url =
     `https://world.openfoodfacts.org/cgi/search.pl` +
     `?search_terms=${encodeURIComponent(query)}` +
-    `&search_simple=1&action=process&json=1&lc=es&cc=es&page_size=20`
+    `&search_simple=1&action=process&json=1&page_size=20` +
+    `&fields=id,_id,code,product_name,product_name_es,brands,nutriments`
 
   try {
     const res = await fetch(url)
@@ -24,26 +26,33 @@ export async function searchFoods(query: string): Promise<OpenFoodResult[]> {
 
     return products
       .filter((p: any) => {
+        if (!p.product_name) return false
         const n = p.nutriments ?? {}
+        // Acepta kcal directo o energía en kJ (÷4.184)
+        const kcal = n['energy-kcal_100g'] ?? (n['energy_100g'] != null ? n['energy_100g'] / 4.184 : null)
         return (
-          p.product_name &&
-          n['energy-kcal_100g'] != null &&
+          kcal != null &&
           n['proteins_100g'] != null &&
           n['carbohydrates_100g'] != null &&
           n['fat_100g'] != null
         )
       })
-      .map((p: any) => ({
-        id: String(p._id ?? p.id ?? p.code ?? Math.random()),
-        name: (p.product_name_es || p.product_name || 'Sin nombre').trim(),
-        brand: (p.brands ?? '').split(',')[0].trim(),
-        per100g: {
-          kcal: Math.round(p.nutriments['energy-kcal_100g']),
-          protein: Math.round(p.nutriments['proteins_100g'] * 10) / 10,
-          carbs: Math.round(p.nutriments['carbohydrates_100g'] * 10) / 10,
-          fat: Math.round(p.nutriments['fat_100g'] * 10) / 10,
-        },
-      }))
+      .slice(0, 15)
+      .map((p: any) => {
+        const n = p.nutriments
+        const kcal = n['energy-kcal_100g'] ?? n['energy_100g'] / 4.184
+        return {
+          id: String(p._id ?? p.id ?? p.code ?? Math.random()),
+          name: (p.product_name_es || p.product_name || 'Sin nombre').trim(),
+          brand: (p.brands ?? '').split(',')[0].trim(),
+          per100g: {
+            kcal: Math.round(kcal),
+            protein: Math.round(n['proteins_100g'] * 10) / 10,
+            carbs: Math.round(n['carbohydrates_100g'] * 10) / 10,
+            fat: Math.round(n['fat_100g'] * 10) / 10,
+          },
+        }
+      })
   } catch {
     return []
   }
