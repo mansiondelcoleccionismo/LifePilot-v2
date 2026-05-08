@@ -1,4 +1,4 @@
-import { Home, Salad, Dumbbell, CheckSquare, CalendarDays, Pill, Clapperboard, Baby, Map, BookOpen, NotebookPen, Sparkles, Settings } from 'lucide-react'
+import { Home, Salad, Dumbbell, CheckSquare, CalendarDays, Pill, Clapperboard, Baby, Map, BookOpen, NotebookPen, Sparkles, Settings, TrendingUp } from 'lucide-react'
 
 export const NAV_GROUPS = [
   {
@@ -28,8 +28,9 @@ export const NAV_GROUPS = [
     id: 'system',
     label: 'Sistema',
     items: [
-      { id: 'ia',       label: 'IA',      icon: Sparkles, path: '/ia' },
-      { id: 'ajustes',  label: 'Ajustes', icon: Settings, path: '/ajustes' },
+      { id: 'ia',         label: 'IA',         icon: Sparkles,   path: '/ia' },
+      { id: 'patrimonio', label: 'Patrimonio', icon: TrendingUp, path: '/patrimonio' },
+      { id: 'ajustes',    label: 'Ajustes',    icon: Settings,   path: '/ajustes' },
     ],
   },
 ]
