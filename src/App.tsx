@@ -3,6 +3,7 @@ import { AppShell } from '@/layouts/AppShell'
 import { InicioPage } from '@/pages/InicioPage'
 import { NutricionPage } from '@/pages/NutricionPage'
 import { EjerciciosPage } from '@/pages/EjerciciosPage'
+import { DiarioPage } from '@/pages/DiarioPage'
 import { TareasPage } from '@/pages/TareasPage'
 
 function Placeholder({ title }: { title: string }) {
@@ -31,7 +32,7 @@ export default function App() {
           <Route path="kira"       element={<Placeholder title="Kira" />} />
           <Route path="planes"     element={<Placeholder title="Planes" />} />
           <Route path="aprender"   element={<Placeholder title="Aprender" />} />
-          <Route path="diario"     element={<Placeholder title="Diario" />} />
+          <Route path="diario"     element={<DiarioPage />} />
           <Route path="ia"         element={<Placeholder title="IA" />} />
           <Route path="ajustes"    element={<Placeholder title="Ajustes" />} />
         </Route>
