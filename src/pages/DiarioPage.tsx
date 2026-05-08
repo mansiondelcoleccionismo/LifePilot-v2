@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import {
   collection, deleteDoc, doc, getDocs, getDoc, onSnapshot,
-  orderBy, query, serverTimestamp, setDoc, where,
+  query, serverTimestamp, setDoc, where,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
@@ -60,16 +60,21 @@ const COL = 'diary_entries'
 function subscribeMonth(y: number, m: number, cb: (entries: DiaryEntry[]) => void) {
   const start = toDateStr(y, m, 1)
   const end   = toDateStr(y, m, new Date(y, m + 1, 0).getDate())
+  // Sin orderBy para evitar necesidad de índice compuesto — ordenamos en cliente
   const q = query(
     collection(db, COL),
     where('date', '>=', start),
     where('date', '<=', end),
-    orderBy('date'),
   )
   return onSnapshot(
     q,
-    (snap) => cb(snap.docs.map((d) => d.data() as DiaryEntry)),
-    () => cb([]),
+    (snap) => {
+      const entries = snap.docs
+        .map((d) => d.data() as DiaryEntry)
+        .sort((a, b) => a.date.localeCompare(b.date))
+      cb(entries)
+    },
+    (err) => { console.error('[Diario] subscribeMonth error:', err); cb([]) },
   )
 }
 
@@ -86,16 +91,20 @@ async function loadRecentDates(days = 62): Promise<Set<string>> {
     const since = new Date()
     since.setDate(since.getDate() - days)
     const sinceStr = toDateStr(since.getFullYear(), since.getMonth(), since.getDate())
-    const q = query(collection(db, COL), where('date', '>=', sinceStr), orderBy('date'))
+    // Sin orderBy para evitar índice compuesto
+    const q = query(collection(db, COL), where('date', '>=', sinceStr))
     const snap = await getDocs(q)
     return new Set(snap.docs.map((d) => d.data().date as string))
-  } catch {
+  } catch (err) {
+    console.error('[Diario] loadRecentDates error:', err)
     return new Set<string>()
   }
 }
 
+const SEED_KEY = 'lifepilot_diary_seeded_v2'
+
 async function seedOldData() {
-  if (localStorage.getItem('lifepilot_diary_seeded')) return
+  if (localStorage.getItem(SEED_KEY)) return
   const seeds: DiaryEntry[] = [
     {
       date: '2026-05-02', mood: 5,
@@ -118,13 +127,16 @@ async function seedOldData() {
       tags: ['salud', 'familia'],
     },
   ]
-  for (const s of seeds) {
-    try {
+  try {
+    for (const s of seeds) {
       const snap = await getDoc(doc(db, COL, s.date))
       if (!snap.exists()) await setDoc(doc(db, COL, s.date), { ...s, updatedAt: serverTimestamp() })
-    } catch { /* ignore */ }
+    }
+    localStorage.setItem(SEED_KEY, '1')
+  } catch (err) {
+    console.error('[Diario] seed error:', err)
+    // No marcamos como hecho: lo reintentará la próxima vez
   }
-  localStorage.setItem('lifepilot_diary_seeded', '1')
 }
 
 // ─── Stats helpers ────────────────────────────────────────────────────────────
