@@ -9,19 +9,9 @@ import { AjustesPage } from '@/pages/AjustesPage'
 import { CalendarioPage } from '@/pages/CalendarioPage'
 import { KiraPage } from '@/pages/KiraPage'
 import { AprenderPage } from '@/pages/AprenderPage'
+import { PlanesPage } from '@/pages/PlanesPage'
+import { OcioPage } from '@/pages/OcioPage'
 import { TareasPage } from '@/pages/TareasPage'
-
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="text-center">
-        <p className="text-4xl mb-4">🚧</p>
-        <h2 className="text-xl font-semibold text-white/70">{title}</h2>
-        <p className="text-sm text-white/30 mt-2">Módulo en construcción</p>
-      </div>
-    </div>
-  )
-}
 
 export default function App() {
   return (
@@ -33,9 +23,9 @@ export default function App() {
           <Route path="ejercicios" element={<EjerciciosPage />} />
           <Route path="tareas"     element={<TareasPage />} />
           <Route path="calendario" element={<CalendarioPage />} />
-          <Route path="ocio"       element={<Placeholder title="Ocio" />} />
+          <Route path="ocio"       element={<OcioPage />} />
           <Route path="kira"       element={<KiraPage />} />
-          <Route path="planes"     element={<Placeholder title="Planes" />} />
+          <Route path="planes"     element={<PlanesPage />} />
           <Route path="aprender"   element={<AprenderPage />} />
           <Route path="diario"     element={<DiarioPage />} />
           <Route path="ia"         element={<IAPage />} />

@@ -1,94 +1,95 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, Headphones, GraduationCap, Plus, X, Edit, Trash2, Filter, Book, Mic, PlayCircle } from 'lucide-react'
-import { addBook, subscribeBooks, updateBook, deleteBook, addPodcast, subscribePodcasts, updatePodcast, deletePodcast, addCourse, subscribeCourses, updateCourse, deleteCourse } from '@/services/learning.service'
-import type { Book as BookType, Podcast, Course, LearningStatus } from '@/types/learning'
+import { Plus, Film, Tv, Gamepad2, X, Edit, Trash2, Star, Filter } from 'lucide-react'
+import { addMovie, subscribeMovies, updateMovie, deleteMovie, addShow, subscribeShows, updateShow, deleteShow, addGame, subscribeGames, updateGame, deleteGame } from '@/services/entertainment.service'
+import type { Movie, Show, Game, EntertainmentStatus } from '@/types/entertainment'
 
-type TabType = 'books' | 'podcasts' | 'courses'
+type TabType = 'movies' | 'shows' | 'games'
 
 const tabConfig = {
-  books: {
-    label: 'Libros',
-    icon: BookOpen,
-    emoji: '📚',
+  movies: {
+    label: 'Películas',
+    icon: Film,
+    emoji: '🎬',
+    color: 'text-red-400',
+    bgColor: 'bg-red-500/10',
+  },
+  shows: {
+    label: 'Series',
+    icon: Tv,
+    emoji: '📺',
     color: 'text-blue-400',
     bgColor: 'bg-blue-500/10',
   },
-  podcasts: {
-    label: 'Podcasts',
-    icon: Headphones,
-    emoji: '🎧',
-    color: 'text-purple-400',
-    bgColor: 'bg-purple-500/10',
-  },
-  courses: {
-    label: 'Cursos',
-    icon: GraduationCap,
-    emoji: '🎓',
-    color: 'text-emerald-400',
-    bgColor: 'bg-emerald-500/10',
+  games: {
+    label: 'Juegos',
+    icon: Gamepad2,
+    emoji: '🎮',
+    color: 'text-green-400',
+    bgColor: 'bg-green-500/10',
   },
 }
 
 const statusOptions = [
   { value: 'todos' as const, label: 'Todos' },
-  { value: 'leyendo' as const, label: 'Leyendo' },
   { value: 'pendiente' as const, label: 'Pendiente' },
+  { value: 'viendo' as const, label: 'Viendo' },
   { value: 'completado' as const, label: 'Completado' },
 ]
 
-export function AprenderPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('books')
-  const [statusFilter, setStatusFilter] = useState<'todos' | LearningStatus>('todos')
-  const [books, setBooks] = useState<BookType[]>([])
-  const [podcasts, setPodcasts] = useState<Podcast[]>([])
-  const [courses, setCourses] = useState<Course[]>([])
+export function OcioPage() {
+  const [activeTab, setActiveTab] = useState<TabType>('movies')
+  const [statusFilter, setStatusFilter] = useState<'todos' | EntertainmentStatus>('todos')
+  const [movies, setMovies] = useState<Movie[]>([])
+  const [shows, setShows] = useState<Show[]>([])
+  const [games, setGames] = useState<Game[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [editingItem, setEditingItem] = useState<BookType | Podcast | Course | null>(null)
+  const [editingItem, setEditingItem] = useState<Movie | Show | Game | null>(null)
 
   // Form state
   const [itemTitle, setItemTitle] = useState('')
-  const [itemAuthor, setItemAuthor] = useState('') // for books
-  const [itemChannel, setItemChannel] = useState('') // for podcasts
-  const [itemPlatform, setItemPlatform] = useState('') // for courses
-  const [itemStatus, setItemStatus] = useState<LearningStatus>('pendiente')
-  const [itemProgress, setItemProgress] = useState(0)
+  const [itemPlatform, setItemPlatform] = useState('')
+  const [itemStatus, setItemStatus] = useState<EntertainmentStatus>('pendiente')
+  const [itemGenre, setItemGenre] = useState('')
+  const [itemRating, setItemRating] = useState<number>(0)
   const [itemNotes, setItemNotes] = useState('')
+  // Games specific
+  const [itemHoursPlayed, setItemHoursPlayed] = useState<number>(0)
 
   useEffect(() => {
-    const unsubscribeBooks = subscribeBooks((fetchedBooks) => {
-      setBooks(fetchedBooks)
+    const unsubscribeMovies = subscribeMovies((fetchedMovies) => {
+      setMovies(fetchedMovies)
       setLoading(false)
     })
 
-    const unsubscribePodcasts = subscribePodcasts((fetchedPodcasts) => {
-      setPodcasts(fetchedPodcasts)
+    const unsubscribeShows = subscribeShows((fetchedShows) => {
+      setShows(fetchedShows)
     })
 
-    const unsubscribeCourses = subscribeCourses((fetchedCourses) => {
-      setCourses(fetchedCourses)
+    const unsubscribeGames = subscribeGames((fetchedGames) => {
+      setGames(fetchedGames)
     })
 
     return () => {
-      unsubscribeBooks()
-      unsubscribePodcasts()
-      unsubscribeCourses()
+      unsubscribeMovies()
+      unsubscribeShows()
+      unsubscribeGames()
     }
   }, [])
 
   const filteredItems = useMemo(() => {
-    let items: (BookType | Podcast | Course)[] = []
+    let items: (Movie | Show | Game)[] = []
 
     switch (activeTab) {
-      case 'books':
-        items = books
+      case 'movies':
+        items = movies
         break
-      case 'podcasts':
-        items = podcasts
+      case 'shows':
+        items = shows
         break
-      case 'courses':
-        items = courses
+      case 'games':
+        items = games
         break
     }
 
@@ -97,53 +98,31 @@ export function AprenderPage() {
     }
 
     return items.filter(item => item.status === statusFilter)
-  }, [activeTab, statusFilter, books, podcasts, courses])
-
-  const itemCounts = useMemo(() => {
-    const counts = {
-      books: { total: books.length, leyendo: 0, pendiente: 0, completado: 0 },
-      podcasts: { total: podcasts.length, leyendo: 0, pendiente: 0, completado: 0 },
-      courses: { total: courses.length, leyendo: 0, pendiente: 0, completado: 0 },
-    }
-
-    books.forEach(book => counts.books[book.status]++)
-    podcasts.forEach(podcast => counts.podcasts[podcast.status]++)
-    courses.forEach(course => counts.courses[course.status]++)
-
-    return counts
-  }, [books, podcasts, courses])
+  }, [activeTab, statusFilter, movies, shows, games])
 
   const handleAddItem = () => {
-    if (!itemTitle.trim()) return
+    if (!itemTitle.trim() || !itemPlatform.trim()) return
 
     const baseItem = {
       title: itemTitle.trim(),
+      platform: itemPlatform.trim(),
       status: itemStatus,
+      genre: itemGenre.trim() || undefined,
+      rating: itemRating > 0 ? itemRating : undefined,
       notes: itemNotes.trim() || undefined,
     }
 
     switch (activeTab) {
-      case 'books':
-        if (!itemAuthor.trim()) return
-        addBook({
-          ...baseItem,
-          author: itemAuthor.trim(),
-          progress: itemProgress,
-        })
+      case 'movies':
+        addMovie(baseItem)
         break
-      case 'podcasts':
-        if (!itemChannel.trim()) return
-        addPodcast({
-          ...baseItem,
-          channel: itemChannel.trim(),
-        })
+      case 'shows':
+        addShow(baseItem)
         break
-      case 'courses':
-        if (!itemPlatform.trim()) return
-        addCourse({
+      case 'games':
+        addGame({
           ...baseItem,
-          platform: itemPlatform.trim(),
-          progress: itemProgress,
+          hoursPlayed: itemHoursPlayed > 0 ? itemHoursPlayed : undefined,
         })
         break
     }
@@ -151,56 +130,45 @@ export function AprenderPage() {
     resetForm()
   }
 
-  const handleEditItem = (item: BookType | Podcast | Course) => {
+  const handleEditItem = (item: Movie | Show | Game) => {
     setEditingItem(item)
     setItemTitle(item.title)
+    setItemPlatform(item.platform)
     setItemStatus(item.status)
+    setItemGenre(item.genre || '')
+    setItemRating(item.rating || 0)
     setItemNotes(item.notes || '')
 
-    if ('author' in item) {
-      setItemAuthor(item.author)
-      setItemProgress(item.progress)
-    } else if ('channel' in item) {
-      setItemChannel(item.channel)
-    } else if ('platform' in item) {
-      setItemPlatform(item.platform)
-      setItemProgress(item.progress)
+    if ('hoursPlayed' in item) {
+      setItemHoursPlayed(item.hoursPlayed || 0)
     }
 
     setShowForm(true)
   }
 
   const handleUpdateItem = () => {
-    if (!editingItem || !itemTitle.trim()) return
+    if (!editingItem || !itemTitle.trim() || !itemPlatform.trim()) return
 
     const baseUpdates = {
       title: itemTitle.trim(),
+      platform: itemPlatform.trim(),
       status: itemStatus,
+      genre: itemGenre.trim() || undefined,
+      rating: itemRating > 0 ? itemRating : undefined,
       notes: itemNotes.trim() || undefined,
     }
 
     switch (activeTab) {
-      case 'books':
-        if (!itemAuthor.trim()) return
-        updateBook(editingItem.id, {
-          ...baseUpdates,
-          author: itemAuthor.trim(),
-          progress: itemProgress,
-        })
+      case 'movies':
+        updateMovie(editingItem.id, baseUpdates)
         break
-      case 'podcasts':
-        if (!itemChannel.trim()) return
-        updatePodcast(editingItem.id, {
-          ...baseUpdates,
-          channel: itemChannel.trim(),
-        })
+      case 'shows':
+        updateShow(editingItem.id, baseUpdates)
         break
-      case 'courses':
-        if (!itemPlatform.trim()) return
-        updateCourse(editingItem.id, {
+      case 'games':
+        updateGame(editingItem.id, {
           ...baseUpdates,
-          platform: itemPlatform.trim(),
-          progress: itemProgress,
+          hoursPlayed: itemHoursPlayed > 0 ? itemHoursPlayed : undefined,
         })
         break
     }
@@ -212,33 +180,33 @@ export function AprenderPage() {
     if (!confirm('¿Estás seguro de que quieres eliminar este elemento?')) return
 
     switch (activeTab) {
-      case 'books':
-        deleteBook(id)
+      case 'movies':
+        deleteMovie(id)
         break
-      case 'podcasts':
-        deletePodcast(id)
+      case 'shows':
+        deleteShow(id)
         break
-      case 'courses':
-        deleteCourse(id)
+      case 'games':
+        deleteGame(id)
         break
     }
   }
 
   const resetForm = () => {
     setItemTitle('')
-    setItemAuthor('')
-    setItemChannel('')
     setItemPlatform('')
     setItemStatus('pendiente')
-    setItemProgress(0)
+    setItemGenre('')
+    setItemRating(0)
     setItemNotes('')
+    setItemHoursPlayed(0)
     setShowForm(false)
     setEditingItem(null)
   }
 
-  const renderItemCard = (item: BookType | Podcast | Course) => {
-    const hasProgress = 'progress' in item
-    const subtitle = 'author' in item ? item.author : 'channel' in item ? item.channel : 'platform' in item ? item.platform : ''
+  const renderItemCard = (item: Movie | Show | Game) => {
+    const hasRating = item.rating && item.rating > 0
+    const hasHoursPlayed = 'hoursPlayed' in item && item.hoursPlayed && item.hoursPlayed > 0
 
     return (
       <motion.div
@@ -253,18 +221,34 @@ export function AprenderPage() {
               {item.title}
             </h3>
             <p className="text-xs text-white/50 truncate mb-2">
-              {subtitle}
+              {item.platform}
             </p>
-            <div className="flex items-center gap-2">
-              <div className={`px-2 py-1 rounded-full text-xs ${
-                item.status === 'leyendo' ? 'bg-blue-500/20 text-blue-300' :
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`px-2 py-1 rounded-full text-xs ${
                 item.status === 'pendiente' ? 'bg-amber-500/20 text-amber-300' :
+                item.status === 'viendo' ? 'bg-blue-500/20 text-blue-300' :
                 'bg-emerald-500/20 text-emerald-300'
               }`}>
-                {item.status === 'leyendo' ? 'Leyendo' :
-                 item.status === 'pendiente' ? 'Pendiente' : 'Completado'}
-              </div>
+                {item.status === 'pendiente' ? 'Pendiente' :
+                 item.status === 'viendo' ? 'Viendo' : 'Completado'}
+              </span>
+              {hasRating && (
+                <div className="flex items-center gap-1">
+                  <Star size={12} className="text-yellow-400 fill-yellow-400" />
+                  <span className="text-xs text-white/60">{item.rating}/10</span>
+                </div>
+              )}
             </div>
+            {hasHoursPlayed && (
+              <p className="text-xs text-white/40 mb-2">
+                {(item as Game).hoursPlayed} horas jugadas
+              </p>
+            )}
+            {item.notes && (
+              <p className="text-xs text-white/40 line-clamp-2">
+                {item.notes}
+              </p>
+            )}
           </div>
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
             <button
@@ -281,27 +265,6 @@ export function AprenderPage() {
             </button>
           </div>
         </div>
-
-        {hasProgress && (
-          <div className="mb-3">
-            <div className="flex items-center justify-between text-xs text-white/50 mb-1">
-              <span>Progreso</span>
-              <span>{item.progress}%</span>
-            </div>
-            <div className="w-full bg-white/10 rounded-full h-2">
-              <div
-                className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${item.progress}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {item.notes && (
-          <p className="text-xs text-white/60 line-clamp-2">
-            {item.notes}
-          </p>
-        )}
       </motion.div>
     )
   }
@@ -311,14 +274,14 @@ export function AprenderPage() {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm text-white/35">Aprendizaje · Conocimiento</p>
-            <h1 className="text-3xl font-bold text-white/90 mt-1">Aprender</h1>
+            <p className="text-sm text-white/35">Entretenimiento · Ocio</p>
+            <h1 className="text-3xl font-bold text-white/90 mt-1">Ocio</h1>
           </div>
           <button
             onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
+            className="inline-flex items-center gap-2 rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500"
           >
-            <Plus size={16} /> Añadir {tabConfig[activeTab].label.toLowerCase()}
+            <Plus size={16} /> Añadir {tabConfig[activeTab].label.toLowerCase().slice(0, -1)}
           </button>
         </div>
       </motion.div>
@@ -326,10 +289,10 @@ export function AprenderPage() {
       {/* Tabs */}
       <div className="mb-6">
         <div className="flex gap-1 p-1 rounded-2xl bg-white/5 border border-white/8">
-          {(Object.entries(tabConfig) as [TabType, typeof tabConfig.books][]).map(([key, config]) => {
+          {(Object.entries(tabConfig) as [TabType, typeof tabConfig.movies][]).map(([key, config]) => {
             const Icon = config.icon
             const isActive = activeTab === key
-            const count = itemCounts[key]
+            const count = key === 'movies' ? movies.length : key === 'shows' ? shows.length : games.length
 
             return (
               <button
@@ -346,7 +309,7 @@ export function AprenderPage() {
                 <span className={`px-2 py-0.5 rounded-full text-xs ${
                   isActive ? 'bg-white/20' : 'bg-white/10'
                 }`}>
-                  {count.total}
+                  {count}
                 </span>
               </button>
             )
@@ -365,7 +328,7 @@ export function AprenderPage() {
                 onClick={() => setStatusFilter(option.value)}
                 className={`px-4 py-2 rounded-xl text-sm transition ${
                   statusFilter === option.value
-                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                    ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                     : 'bg-white/5 text-white/60 hover:text-white/80 border border-transparent'
                 }`}
               >
@@ -388,18 +351,18 @@ export function AprenderPage() {
           {filteredItems.length === 0 ? (
             <div className="col-span-full rounded-3xl border border-white/8 bg-[#1E1E28] p-12 text-center">
               <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
-                {activeTab === 'books' ? <Book size={24} className="text-white/30" /> :
-                 activeTab === 'podcasts' ? <Mic size={24} className="text-white/30" /> :
-                 <PlayCircle size={24} className="text-white/30" />}
+                {activeTab === 'movies' ? <Film size={24} className="text-white/30" /> :
+                 activeTab === 'shows' ? <Tv size={24} className="text-white/30" /> :
+                 <Gamepad2 size={24} className="text-white/30" />}
               </div>
               <p className="text-sm text-white/40">
                 {statusFilter === 'todos'
-                  ? `No tienes ${tabConfig[activeTab].label.toLowerCase()} registrados`
+                  ? `No tienes ${tabConfig[activeTab].label.toLowerCase()} registradas`
                   : `No hay ${tabConfig[activeTab].label.toLowerCase()} con estado "${statusOptions.find(o => o.value === statusFilter)?.label.toLowerCase()}"`
                 }
               </p>
               <p className="text-xs text-white/30 mt-1">
-                ¡Añade tu primer {tabConfig[activeTab].label.toLowerCase().slice(0, -1)}!
+                ¡Añade tu primera {tabConfig[activeTab].label.toLowerCase().slice(0, -1)}!
               </p>
             </div>
           ) : (
@@ -444,77 +407,77 @@ export function AprenderPage() {
                     value={itemTitle}
                     onChange={(e) => setItemTitle(e.target.value)}
                     className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
-                    placeholder={`Título del ${tabConfig[activeTab].label.toLowerCase().slice(0, -1)}`}
+                    placeholder={`Título de la ${tabConfig[activeTab].label.toLowerCase().slice(0, -1)}`}
                   />
                 </div>
 
-                {activeTab === 'books' && (
-                  <div>
-                    <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Autor</label>
-                    <input
-                      value={itemAuthor}
-                      onChange={(e) => setItemAuthor(e.target.value)}
-                      className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
-                      placeholder="Nombre del autor"
-                    />
-                  </div>
-                )}
+                <div>
+                  <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Plataforma</label>
+                  <select
+                    value={itemPlatform}
+                    onChange={(e) => setItemPlatform(e.target.value)}
+                    className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
+                  >
+                    <option value="">Seleccionar plataforma...</option>
+                    {['Netflix', 'HBO', 'Amazon Prime', 'Disney+', 'Apple TV+', 'Movistar+', 'YouTube', 'Steam', 'PlayStation', 'Xbox', 'Nintendo Switch', 'PC', 'Otro'].map(platform => (
+                      <option key={platform} value={platform}>{platform}</option>
+                    ))}
+                  </select>
+                </div>
 
-                {activeTab === 'podcasts' && (
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Canal</label>
-                    <input
-                      value={itemChannel}
-                      onChange={(e) => setItemChannel(e.target.value)}
+                    <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Estado</label>
+                    <select
+                      value={itemStatus}
+                      onChange={(e) => setItemStatus(e.target.value as EntertainmentStatus)}
                       className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
-                      placeholder="Nombre del canal/podcast"
-                    />
+                    >
+                      <option value="pendiente">Pendiente</option>
+                      <option value="viendo">Viendo</option>
+                      <option value="completado">Completado</option>
+                    </select>
                   </div>
-                )}
 
-                {activeTab === 'courses' && (
                   <div>
-                    <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Plataforma</label>
+                    <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Valoración (opcional)</label>
+                    <div className="mt-2 flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="10"
+                        step="0.5"
+                        value={itemRating}
+                        onChange={(e) => setItemRating(Number(e.target.value))}
+                        className="flex-1 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider"
+                      />
+                      <span className="text-sm text-white/60 min-w-[3ch]">{itemRating || 0}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {activeTab === 'games' && (
+                  <div>
+                    <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Horas jugadas</label>
                     <input
-                      value={itemPlatform}
-                      onChange={(e) => setItemPlatform(e.target.value)}
-                      className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
-                      placeholder="Udemy, Coursera, etc."
+                      type="number"
+                      min="0"
+                      value={itemHoursPlayed}
+                      onChange={(e) => setItemHoursPlayed(Number(e.target.value))}
+                      className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-3 py-2 text-sm text-white/80 focus:outline-none"
                     />
                   </div>
                 )}
 
                 <div>
-                  <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Estado</label>
-                  <select
-                    value={itemStatus}
-                    onChange={(e) => setItemStatus(e.target.value as LearningStatus)}
+                  <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Género (opcional)</label>
+                  <input
+                    value={itemGenre}
+                    onChange={(e) => setItemGenre(e.target.value)}
                     className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
-                  >
-                    <option value="pendiente">Pendiente</option>
-                    <option value="leyendo">Leyendo</option>
-                    <option value="completado">Completado</option>
-                  </select>
+                    placeholder="Acción, Comedia, Drama..."
+                  />
                 </div>
-
-                {(activeTab === 'books' || activeTab === 'courses') && (
-                  <div>
-                    <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Progreso (%)</label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={itemProgress}
-                      onChange={(e) => setItemProgress(Number(e.target.value))}
-                      className="mt-2 w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider"
-                    />
-                    <div className="flex justify-between text-xs text-white/50 mt-1">
-                      <span>0%</span>
-                      <span className="font-medium">{itemProgress}%</span>
-                      <span>100%</span>
-                    </div>
-                  </div>
-                )}
 
                 <div>
                   <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Notas (opcional)</label>
@@ -523,18 +486,15 @@ export function AprenderPage() {
                     onChange={(e) => setItemNotes(e.target.value)}
                     rows={3}
                     className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none resize-none"
-                    placeholder="Notas adicionales..."
+                    placeholder="Comentarios personales..."
                   />
                 </div>
 
                 <div className="flex gap-3 pt-4">
                   <button
                     onClick={editingItem ? handleUpdateItem : handleAddItem}
-                    disabled={!itemTitle.trim() ||
-                      (activeTab === 'books' && !itemAuthor.trim()) ||
-                      (activeTab === 'podcasts' && !itemChannel.trim()) ||
-                      (activeTab === 'courses' && !itemPlatform.trim())}
-                    className="flex-1 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!itemTitle.trim() || !itemPlatform.trim()}
+                    className="flex-1 rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {editingItem ? 'Actualizar' : 'Añadir'} {tabConfig[activeTab].label.toLowerCase().slice(0, -1)}
                   </button>

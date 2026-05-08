@@ -1,0 +1,8 @@
+{
+  "name": "LifePilot",
+  "short_name": "LifePilot",
+  "theme_color": "#09090E",
+  "background_color": "#09090E",
+  "display": "standalone",
+  "start_url": "/"
+}

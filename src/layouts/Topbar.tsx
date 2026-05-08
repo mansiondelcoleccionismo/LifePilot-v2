@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Search, Bell, Moon, Sun, Menu } from 'lucide-react'
 import { useUIStore } from '@/store/ui.store'
 import { ALL_NAV_ITEMS } from '@/lib/navigation'
+import { useTasks } from '@/hooks/useTasks'
 
 function getPageInfo(pathname: string) {
   const emojis: Record<string, string> = {
@@ -20,6 +21,7 @@ export function Topbar() {
   const { pathname } = useLocation()
   const { setMobileMenuOpen, sidebarCollapsed } = useUIStore()
   const { label, emoji } = getPageInfo(pathname)
+  const { pending } = useTasks()
 
   return (
     <header
@@ -60,7 +62,13 @@ export function Topbar() {
         </button>
         <button className="relative w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white/70 hover:bg-white/[0.06] transition-colors">
           <Bell size={15} />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-blue-400" />
+          {pending > 0 ? (
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-4 rounded-full bg-red-500 text-[10px] font-semibold leading-4 text-white flex items-center justify-center px-1.5">
+              {pending}
+            </span>
+          ) : (
+            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-blue-400" />
+          )}
         </button>
         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-xs font-semibold cursor-pointer ring-2 ring-white/[0.08]">
           D

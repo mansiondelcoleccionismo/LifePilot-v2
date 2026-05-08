@@ -3,10 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronLeft, ChevronRight, Zap } from 'lucide-react'
 import { useUIStore } from '@/store/ui.store'
 import { NAV_GROUPS } from '@/lib/navigation'
+import { useTasks } from '@/hooks/useTasks'
 
 export function Sidebar() {
   const { sidebarCollapsed, toggleSidebarCollapse } = useUIStore()
   const { pathname } = useLocation()
+  const { pending } = useTasks()
 
   return (
     <motion.aside
@@ -55,6 +57,7 @@ export function Sidebar() {
               {group.items.map((item) => {
                 const Icon = item.icon
                 const isActive = item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)
+                const badge = item.path === '/tareas' ? (pending > 0 ? String(pending) : undefined) : item.badge
                 return (
                   <NavLink
                     key={item.id}
@@ -87,12 +90,12 @@ export function Sidebar() {
                         </motion.span>
                       )}
                     </AnimatePresence>
-                    {!sidebarCollapsed && item.badge && (
+                    {!sidebarCollapsed && badge && (
                       <span className="ml-auto bg-blue-500/20 text-blue-400 text-[10px] font-semibold rounded-full px-1.5 py-0.5">
-                        {item.badge}
+                        {badge}
                       </span>
                     )}
-                    {sidebarCollapsed && item.badge && (
+                    {sidebarCollapsed && badge && (
                       <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-blue-400" />
                     )}
                   </NavLink>
