@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Flame, Loader2, Bot, Trash2, X } from 'lucide-react'
+import { Search, Flame, Loader2, Bot, Trash2, X, Camera, Check, RotateCcw } from 'lucide-react'
 import { addNutritionEntry, deleteNutritionEntry, subscribeNutritionEntries } from '@/services/nutrition.service'
 import { searchFoods, type OpenFoodResult } from '@/services/openfoodfacts.service'
 import { getGeminiKey } from '@/services/ai.service'
@@ -50,6 +50,355 @@ async function fetchAIMacros(
   } catch {
     return null
   }
+}
+
+// ─── Foto al plato — tipos ────────────────────────────────────────────────────
+interface PhotoFood {
+  nombre: string; gramos: number
+  kcal: number; protein: number; carbs: number; fat: number
+}
+interface PhotoResult {
+  descripcion: string
+  alimentos: PhotoFood[]
+  totales: { kcal: number; protein: number; carbs: number; fat: number }
+}
+
+// Redimensiona la imagen a max 1024px y la convierte a base64
+async function resizeAndEncode(file: File): Promise<{ data: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const MAX = 1024
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error('resize_failed')); return }
+        const reader = new FileReader()
+        reader.onload = () => resolve({ data: (reader.result as string).split(',')[1], mimeType: 'image/jpeg' })
+        reader.onerror = reject
+        reader.readAsDataURL(blob)
+      }, 'image/jpeg', 0.85)
+    }
+    img.onerror = reject
+    img.src = url
+  })
+}
+
+async function analyzePhoto(file: File): Promise<PhotoResult> {
+  const key = getGeminiKey()
+  if (!key) throw new Error('NO_KEY')
+  const { data, mimeType } = await resizeAndEncode(file)
+  const prompt = `Analiza esta foto de comida. Identifica todos los alimentos visibles y estima las cantidades en gramos. Devuelve SOLO un JSON válido con este formato exacto, sin texto adicional:
+{"descripcion":"descripción breve del plato","alimentos":[{"nombre":"nombre del alimento","gramos":0,"kcal":0,"protein":0,"carbs":0,"fat":0}],"totales":{"kcal":0,"protein":0,"carbs":0,"fat":0}}`
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ inlineData: { mimeType, data } }, { text: prompt }] }],
+        generationConfig: { temperature: 0.1 },
+      }),
+    },
+  )
+  if (!res.ok) throw new Error(`API_${res.status}`)
+  const json = await res.json()
+  const text: string = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  const match = text.match(/\{[\s\S]*\}/)
+  if (!match) throw new Error('NO_FOOD')
+  try { return JSON.parse(match[0]) as PhotoResult }
+  catch { throw new Error('PARSE_ERROR') }
+}
+
+// ─── PhotoModal ───────────────────────────────────────────────────────────────
+function PhotoModal({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState<'select' | 'preview' | 'analyzing' | 'result' | 'error'>('select')
+  const [file, setFile]     = useState<File | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [result, setResult]   = useState<PhotoResult | null>(null)
+  const [error, setError]     = useState('')
+  const [checked, setChecked] = useState<Set<number>>(new Set())
+  const [adding, setAdding]   = useState(false)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const fileRef   = useRef<HTMLInputElement>(null)
+  const hasKey    = Boolean(getGeminiKey())
+
+  function handleFile(f: File) {
+    setFile(f)
+    setPreview(URL.createObjectURL(f))
+    setStep('preview')
+  }
+
+  async function handleAnalyze() {
+    if (!file) return
+    setStep('analyzing')
+    try {
+      const r = await analyzePhoto(file)
+      setResult(r)
+      setChecked(new Set(r.alimentos.map((_, i) => i)))
+      setStep('result')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg === 'NO_KEY') {
+        setError('Configura tu API key de Gemini en Ajustes para usar esta función.')
+      } else if (msg === 'NO_FOOD' || msg === 'PARSE_ERROR') {
+        setError('No he podido identificar los alimentos. Intenta con mejor iluminación.')
+      } else {
+        setError(`Error al analizar: ${msg}`)
+      }
+      setStep('error')
+    }
+  }
+
+  async function handleAdd() {
+    if (!result) return
+    setAdding(true)
+    for (const [i, food] of result.alimentos.entries()) {
+      if (!checked.has(i)) continue
+      await addNutritionEntry(
+        `${food.nombre} (${food.gramos}g)`,
+        Math.round(food.kcal),
+        Math.round(food.protein * 10) / 10,
+        Math.round(food.carbs * 10) / 10,
+        Math.round(food.fat * 10) / 10,
+      )
+    }
+    setAdding(false)
+    onClose()
+  }
+
+  const toggleCheck = (i: number) =>
+    setChecked((prev) => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s })
+
+  function macroColor(food: PhotoFood) {
+    if (food.protein >= food.carbs && food.protein >= food.fat) return 'border-blue-500/25 bg-blue-500/8'
+    if (food.carbs >= food.protein && food.carbs >= food.fat)   return 'border-amber-500/25 bg-amber-500/8'
+    return 'border-rose-500/25 bg-rose-500/8'
+  }
+
+  const selTotals = useMemo(() => {
+    if (!result) return null
+    return result.alimentos.filter((_, i) => checked.has(i)).reduce(
+      (a, f) => ({ kcal: a.kcal + f.kcal, protein: a.protein + f.protein, carbs: a.carbs + f.carbs, fat: a.fat + f.fat }),
+      { kcal: 0, protein: 0, carbs: 0, fat: 0 },
+    )
+  }, [result, checked])
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/65 backdrop-blur-sm"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 40, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 20, scale: 0.97 }}
+        transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+        className="w-full max-w-md rounded-3xl bg-[#13131b] border border-white/10 overflow-hidden max-h-[90vh] flex flex-col"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/6 shrink-0">
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-white/25">Gemini Vision</p>
+            <h3 className="text-base font-semibold text-white/90 mt-0.5">Analizar plato</h3>
+          </div>
+          <button onClick={onClose}
+            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition">
+            <X size={15} className="text-white/60" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+
+          {/* select */}
+          {step === 'select' && (
+            <>
+              {!hasKey && (
+                <div className="rounded-xl bg-amber-500/8 border border-amber-500/15 p-3 text-sm text-amber-300/80">
+                  Configura tu API key de Gemini en Ajustes para usar esta función.
+                </div>
+              )}
+              <p className="text-sm text-white/45 text-center pt-2">¿Cómo quieres añadir la foto?</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => cameraRef.current?.click()} disabled={!hasKey}
+                  className="flex flex-col items-center gap-3 rounded-2xl border border-white/8 bg-white/4 p-6 hover:bg-white/8 transition disabled:opacity-35 disabled:cursor-not-allowed">
+                  <span className="text-4xl">📷</span>
+                  <span className="text-sm font-medium text-white/75">Hacer foto</span>
+                  <span className="text-[10px] text-white/30 text-center leading-snug">Usa la cámara del móvil</span>
+                </button>
+                <button onClick={() => fileRef.current?.click()} disabled={!hasKey}
+                  className="flex flex-col items-center gap-3 rounded-2xl border border-white/8 bg-white/4 p-6 hover:bg-white/8 transition disabled:opacity-35 disabled:cursor-not-allowed">
+                  <span className="text-4xl">🖼️</span>
+                  <span className="text-sm font-medium text-white/75">Subir imagen</span>
+                  <span className="text-[10px] text-white/30 text-center leading-snug">Elige de la galería</span>
+                </button>
+              </div>
+              {/* Hidden inputs */}
+              <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
+              <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
+            </>
+          )}
+
+          {/* preview */}
+          {step === 'preview' && preview && (
+            <>
+              <div className="rounded-2xl overflow-hidden">
+                <img src={preview} alt="Preview del plato" className="w-full object-cover max-h-60" />
+              </div>
+              <button onClick={handleAnalyze}
+                className="w-full rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white hover:bg-violet-500 transition flex items-center justify-center gap-2">
+                <Bot size={15} />
+                Analizar con IA
+              </button>
+              <button onClick={() => { setStep('select'); setPreview(null); setFile(null) }}
+                className="w-full rounded-2xl border border-white/8 bg-white/4 py-2.5 text-sm text-white/40 hover:text-white/65 transition">
+                Cambiar foto
+              </button>
+            </>
+          )}
+
+          {/* analyzing */}
+          {step === 'analyzing' && (
+            <div className="flex flex-col items-center justify-center py-10 gap-5">
+              {preview && (
+                <div className="w-20 h-20 rounded-2xl overflow-hidden opacity-55 ring-1 ring-white/10">
+                  <img src={preview} alt="" className="w-full h-full object-cover" />
+                </div>
+              )}
+              <Loader2 size={30} className="text-violet-400 animate-spin" />
+              <div className="text-center">
+                <p className="text-sm font-medium text-white/70">Analizando tu plato...</p>
+                <p className="text-xs text-white/30 mt-1">Gemini Vision identificando alimentos</p>
+              </div>
+            </div>
+          )}
+
+          {/* result */}
+          {step === 'result' && result && (
+            <>
+              <div className="rounded-xl bg-violet-500/8 border border-violet-500/15 p-3">
+                <p className="text-[10px] uppercase tracking-widest text-violet-400/60 mb-1">Plato detectado</p>
+                <p className="text-sm text-white/80">{result.descripcion}</p>
+              </div>
+
+              {preview && (
+                <div className="rounded-xl overflow-hidden h-24">
+                  <img src={preview} alt="" className="w-full h-full object-cover" />
+                </div>
+              )}
+
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">
+                  Alimentos identificados — toca para incluir/excluir
+                </p>
+                <div className="space-y-2">
+                  {result.alimentos.map((food, i) => (
+                    <button key={i} onClick={() => toggleCheck(i)}
+                      className={`w-full text-left rounded-xl border p-3 transition ${
+                        checked.has(i) ? macroColor(food) : 'border-white/6 bg-white/3 opacity-45'
+                      }`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition ${
+                          checked.has(i) ? 'bg-emerald-500 border-emerald-500' : 'bg-white/8 border-white/15'
+                        }`}>
+                          {checked.has(i) && <Check size={11} className="text-white" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-white/85 truncate">{food.nombre}</p>
+                            <span className="text-xs text-white/35 shrink-0">{food.gramos}g</span>
+                          </div>
+                          <div className="flex gap-3 mt-1 flex-wrap">
+                            <span className="text-[11px] text-orange-400">{Math.round(food.kcal)} kcal</span>
+                            <span className="text-[11px] text-blue-400">P {Math.round(food.protein)}g</span>
+                            <span className="text-[11px] text-amber-400">C {Math.round(food.carbs)}g</span>
+                            <span className="text-[11px] text-rose-400">G {Math.round(food.fat)}g</span>
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {selTotals && checked.size > 0 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">Total seleccionado</p>
+                  <div className="grid grid-cols-4 gap-2 mb-3">
+                    {[
+                      { l: 'Kcal',   v: Math.round(selTotals.kcal),              c: 'text-orange-400', bg: 'bg-orange-500/10' },
+                      { l: 'Prot',   v: `${Math.round(selTotals.protein)}g`,     c: 'text-blue-400',   bg: 'bg-blue-500/10'   },
+                      { l: 'Carbs',  v: `${Math.round(selTotals.carbs)}g`,       c: 'text-amber-400',  bg: 'bg-amber-500/10'  },
+                      { l: 'Grasas', v: `${Math.round(selTotals.fat)}g`,         c: 'text-rose-400',   bg: 'bg-rose-500/10'   },
+                    ].map((m) => (
+                      <div key={m.l} className={`rounded-xl ${m.bg} p-2.5 text-center`}>
+                        <p className={`text-sm font-bold ${m.c}`}>{m.v}</p>
+                        <p className="text-[10px] text-white/30 mt-0.5">{m.l}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {[
+                    { label: 'Proteína', val: selTotals.protein, max: 50, color: 'bg-blue-500' },
+                    { label: 'Carbos',   val: selTotals.carbs,   max: 100, color: 'bg-amber-500' },
+                    { label: 'Grasas',   val: selTotals.fat,     max: 40,  color: 'bg-rose-500' },
+                  ].map((b) => (
+                    <div key={b.label} className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[10px] text-white/30 w-14 shrink-0">{b.label}</span>
+                      <div className="flex-1 h-1.5 rounded-full bg-white/6 overflow-hidden">
+                        <motion.div initial={{ width: 0 }}
+                          animate={{ width: `${Math.min(100, (b.val / b.max) * 100)}%` }}
+                          transition={{ duration: 0.6 }}
+                          className={`h-full rounded-full ${b.color}`} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* error */}
+          {step === 'error' && (
+            <div className="text-center py-8 space-y-4">
+              <div className="text-5xl">😕</div>
+              <p className="text-sm text-white/60 leading-relaxed px-2">{error}</p>
+              {!error.includes('Ajustes') && (
+                <button onClick={() => { setStep('preview'); setError('') }}
+                  className="inline-flex items-center gap-2 rounded-xl bg-white/8 border border-white/10 px-4 py-2.5 text-sm text-white/55 hover:text-white/80 transition">
+                  <RotateCcw size={14} />
+                  Reintentar
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer — solo en resultado */}
+        {step === 'result' && (
+          <div className="px-5 pb-5 pt-2 space-y-2 shrink-0 border-t border-white/5">
+            <button onClick={handleAdd} disabled={adding || checked.size === 0}
+              className="w-full rounded-2xl bg-emerald-600 py-3.5 text-sm font-semibold text-white hover:bg-emerald-500 transition disabled:opacity-40 flex items-center justify-center gap-2">
+              {adding && <Loader2 size={14} className="animate-spin" />}
+              {adding ? 'Añadiendo...' : `Añadir ${checked.size} alimento${checked.size !== 1 ? 's' : ''} al día`}
+            </button>
+            <button onClick={onClose}
+              className="w-full rounded-2xl border border-white/8 bg-white/4 py-2.5 text-sm text-white/35 hover:text-white/60 transition">
+              Editar manualmente
+            </button>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  )
 }
 
 function MacroBar({
@@ -106,6 +455,7 @@ export function NutricionPage() {
 
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
+  const [showPhotoModal, setShowPhotoModal] = useState(false)
 
   const todayDate = new Date().toLocaleDateString('es-ES', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -426,6 +776,15 @@ export function NutricionPage() {
             </div>
           </div>
 
+          {/* Botón foto al plato */}
+          <button
+            onClick={() => setShowPhotoModal(true)}
+            className="w-full mb-4 flex items-center justify-center gap-2 rounded-2xl border border-violet-500/20 bg-violet-500/8 px-4 py-3 text-sm font-medium text-violet-300 hover:bg-violet-500/14 transition"
+          >
+            <Camera size={15} />
+            📷 Analizar plato con IA
+          </button>
+
           {/* Search input */}
           <div className="relative" ref={searchRef}>
             <div className="relative">
@@ -580,6 +939,11 @@ export function NutricionPage() {
           )}
         </motion.section>
       </div>
+
+      {/* Photo modal */}
+      <AnimatePresence>
+        {showPhotoModal && <PhotoModal onClose={() => setShowPhotoModal(false)} />}
+      </AnimatePresence>
     </div>
   )
 }
