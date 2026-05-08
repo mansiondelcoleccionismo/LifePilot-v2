@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AppShell } from '@/layouts/AppShell'
 import { InicioPage } from '@/pages/InicioPage'
+import { TareasPage } from '@/pages/TareasPage'
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -19,10 +20,10 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<AppShell />}>
-          <Route index element={<InicioPage />} />
+          <Route index           element={<InicioPage />} />
           <Route path="nutricion"  element={<Placeholder title="Nutrición" />} />
           <Route path="ejercicios" element={<Placeholder title="Ejercicios" />} />
-          <Route path="tareas"     element={<Placeholder title="Tareas" />} />
+          <Route path="tareas"     element={<TareasPage />} />
           <Route path="calendario" element={<Placeholder title="Calendario" />} />
           <Route path="ocio"       element={<Placeholder title="Ocio" />} />
           <Route path="kira"       element={<Placeholder title="Kira" />} />
