@@ -1,7 +1,26 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { User, Key, Apple, Palette, Database, Save, Download } from 'lucide-react'
+import { User, Key, Apple, Palette, Database, Save, Download, Loader2 } from 'lucide-react'
 import { DAY_TARGETS, type DayType, type MacroTarget } from '@/types/nutrition'
+import { getActiveKeyInfo, testGeminiKey, testGroqKey, clearCooldowns } from '@/services/ai.service'
+
+interface AIKeyConfig {
+  id: string
+  label: string
+  provider: 'Gemini' | 'Groq'
+  index: number
+  storageKey: string
+  placeholder: string
+  link: string
+  isGemini: boolean
+}
+
+const AI_KEY_CONFIGS: AIKeyConfig[] = [
+  { id: 'gemini_1', label: 'Gemini — Key 1', provider: 'Gemini', index: 1, storageKey: 'lifepilot_gemini_key_1', placeholder: 'AIza...', link: 'https://aistudio.google.com/apikey', isGemini: true },
+  { id: 'gemini_2', label: 'Gemini — Key 2', provider: 'Gemini', index: 2, storageKey: 'lifepilot_gemini_key_2', placeholder: 'AIza...', link: 'https://aistudio.google.com/apikey', isGemini: true },
+  { id: 'gemini_3', label: 'Gemini — Key 3', provider: 'Gemini', index: 3, storageKey: 'lifepilot_gemini_key_3', placeholder: 'AIza...', link: 'https://aistudio.google.com/apikey', isGemini: true },
+  { id: 'groq',     label: 'Groq — Llama 3.3', provider: 'Groq', index: 0, storageKey: 'lifepilot_groq_key',     placeholder: 'gsk_...', link: 'https://console.groq.com/keys',       isGemini: false },
+]
 
 type GoalType = 'perder' | 'mantener' | 'ganar'
 type ThemeType = 'oscuro' | 'claro' | 'sistema'
@@ -19,7 +38,6 @@ type CustomMacros = {
 
 const STORAGE_KEYS = {
   profile: 'lifepilot_profile',
-  geminiKey: 'lifepilot_gemini_key',
   customMacros: 'lifepilot_custom_macros',
   theme: 'lifepilot_theme',
 }
@@ -35,7 +53,9 @@ const defaultMacros: CustomMacros = { ...DAY_TARGETS }
 
 export function AjustesPage() {
   const [profile, setProfile] = useState<ProfileData>(defaultProfile)
-  const [geminiKey, setGeminiKey] = useState('')
+  const [aiKeyValues, setAiKeyValues] = useState<Record<string, string>>({})
+  const [testStates, setTestStates] = useState<Record<string, 'idle' | 'testing' | 'ok' | 'fail'>>({})
+  const [activeKeyInfo, setActiveKeyInfo] = useState<{ provider: string; index: number } | null>(null)
   const [customMacros, setCustomMacros] = useState<CustomMacros>(defaultMacros)
   const [theme, setTheme] = useState<ThemeType>('oscuro')
   const [feedback, setFeedback] = useState('')
@@ -51,9 +71,11 @@ export function AjustesPage() {
       }
     }
 
-    // Load Gemini key
-    const savedKey = localStorage.getItem(STORAGE_KEYS.geminiKey) || ''
-    setGeminiKey(savedKey)
+    // Load AI keys
+    const keys: Record<string, string> = {}
+    AI_KEY_CONFIGS.forEach(cfg => { keys[cfg.id] = localStorage.getItem(cfg.storageKey)?.trim() ?? '' })
+    setAiKeyValues(keys)
+    setActiveKeyInfo(getActiveKeyInfo())
 
     // Load custom macros
     const savedMacros = localStorage.getItem(STORAGE_KEYS.customMacros)
@@ -76,10 +98,25 @@ export function AjustesPage() {
     setTimeout(() => setFeedback(''), 2400)
   }
 
-  const saveGeminiKey = () => {
-    localStorage.setItem(STORAGE_KEYS.geminiKey, geminiKey.trim())
-    setFeedback('API key guardada correctamente')
+  const saveAiKey = (id: string, storageKey: string) => {
+    const value = (aiKeyValues[id] ?? '').trim()
+    localStorage.setItem(storageKey, value)
+    if (storageKey === 'lifepilot_gemini_key_1') localStorage.setItem('lifepilot_gemini_key', value)
+    setActiveKeyInfo(getActiveKeyInfo())
+    setFeedback('API key guardada')
     setTimeout(() => setFeedback(''), 2400)
+  }
+
+  const testAiKey = async (cfg: AIKeyConfig) => {
+    const value = (aiKeyValues[cfg.id] ?? '').trim()
+    if (!value) return
+    setTestStates(prev => ({ ...prev, [cfg.id]: 'testing' }))
+    let ok = false
+    try {
+      ok = cfg.isGemini ? await testGeminiKey(value) : await testGroqKey(value)
+    } catch { ok = false }
+    setTestStates(prev => ({ ...prev, [cfg.id]: ok ? 'ok' : 'fail' }))
+    setTimeout(() => setTestStates(prev => ({ ...prev, [cfg.id]: 'idle' })), 4000)
   }
 
   const saveMacros = () => {
@@ -98,7 +135,7 @@ export function AjustesPage() {
   const exportData = () => {
     const data = {
       profile,
-      geminiKey: geminiKey ? '[CONFIGURADA]' : '[NO CONFIGURADA]',
+      aiKeys: AI_KEY_CONFIGS.map(cfg => ({ id: cfg.id, configured: Boolean(aiKeyValues[cfg.id]) })),
       customMacros,
       theme,
       exportDate: new Date().toISOString(),
@@ -218,45 +255,84 @@ export function AjustesPage() {
 
         {/* IA */}
         <section className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5">
-          <div className="mb-5 flex items-center gap-3">
+          <div className="mb-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
               <Key size={20} className="text-emerald-300" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">IA</p>
-              <h2 className="text-lg font-semibold text-white/90 mt-1">Google Gemini</h2>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">IA · Rotación automática</p>
+              <h2 className="text-lg font-semibold text-white/90 mt-1">API Keys de IA</h2>
             </div>
           </div>
 
-          <div>
-            <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">API Key</label>
-            <div className="mt-2 flex gap-3">
-              <input
-                value={geminiKey}
-                onChange={(e) => setGeminiKey(e.target.value)}
-                type="password"
-                className="flex-1 rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
-                placeholder="Introduce tu API key de Gemini"
-              />
-              <button
-                onClick={saveGeminiKey}
-                className="rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400"
-              >
-                Guardar
-              </button>
-            </div>
-            <p className="mt-2 text-xs text-white/40">
-              Obtén tu API key gratuita en{' '}
-              <a
-                href="https://makersuite.google.com/app/apikey"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300"
-              >
-                Google AI Studio
-              </a>
-            </p>
+          <p className="text-xs text-white/35 mb-5 leading-relaxed">
+            Configura hasta 3 claves de Gemini y 1 de Groq. Si una tiene rate limit la app pasa a la siguiente automáticamente (cooldown de 60s).
+          </p>
+
+          <div className="space-y-3">
+            {AI_KEY_CONFIGS.map((cfg) => {
+              const isActive = activeKeyInfo?.provider === cfg.provider && activeKeyInfo?.index === cfg.index
+              const ts = testStates[cfg.id] ?? 'idle'
+              return (
+                <div key={cfg.id} className="rounded-2xl border border-white/8 bg-white/3 p-4">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-white/70">{cfg.label}</span>
+                      {isActive && (
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-semibold">
+                          ACTIVA
+                        </span>
+                      )}
+                    </div>
+                    <a
+                      href={cfg.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-blue-400/50 hover:text-blue-400 transition"
+                    >
+                      Obtener →
+                    </a>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      value={aiKeyValues[cfg.id] ?? ''}
+                      onChange={(e) => setAiKeyValues(prev => ({ ...prev, [cfg.id]: e.target.value }))}
+                      type="password"
+                      placeholder={cfg.placeholder}
+                      className="flex-1 rounded-xl bg-white/5 border border-white/8 px-3 py-2.5 text-sm text-white/80 focus:outline-none min-w-0"
+                    />
+                    <button
+                      onClick={() => saveAiKey(cfg.id, cfg.storageKey)}
+                      className="rounded-xl bg-emerald-500/15 border border-emerald-500/20 px-3 py-2.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/25 transition shrink-0"
+                    >
+                      Guardar
+                    </button>
+                    <button
+                      onClick={() => testAiKey(cfg)}
+                      disabled={ts === 'testing' || !aiKeyValues[cfg.id]?.trim()}
+                      className="rounded-xl bg-white/5 border border-white/8 px-3 py-2.5 text-xs text-white/50 hover:text-white/80 transition shrink-0 disabled:opacity-40 w-16 flex items-center justify-center"
+                    >
+                      {ts === 'testing' ? <Loader2 size={13} className="animate-spin" /> :
+                       ts === 'ok' ? '✅' :
+                       ts === 'fail' ? '❌' : 'Probar'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
+
+          <button
+            onClick={() => {
+              clearCooldowns()
+              setActiveKeyInfo(getActiveKeyInfo())
+              setFeedback('Cooldowns de IA reiniciados')
+              setTimeout(() => setFeedback(''), 2400)
+            }}
+            className="mt-4 text-xs text-white/25 hover:text-white/50 transition"
+          >
+            Reiniciar cooldowns
+          </button>
         </section>
 
         {/* Nutrición */}

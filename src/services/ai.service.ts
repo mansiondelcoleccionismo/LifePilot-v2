@@ -1,62 +1,187 @@
 import type { AIMessage } from '@/types/ai'
 
-const STORAGE_KEY = 'lifepilot_gemini_key'
-const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent'
+// ── Storage keys ──────────────────────────────────────────────────────────────
+const LEGACY_KEY       = 'lifepilot_gemini_key'
+const GEMINI_KEY_SLOTS = [
+  'lifepilot_gemini_key_1',
+  'lifepilot_gemini_key_2',
+  'lifepilot_gemini_key_3',
+] as const
+const GROQ_KEY_SLOT = 'lifepilot_groq_key'
+const COOLDOWNS_KEY = 'lifepilot_ai_cooldowns'
+const COOLDOWN_MS   = 60_000
 
-export function getGeminiKey() {
-  return window.localStorage.getItem(STORAGE_KEY) ?? ''
+// ── Key readers ───────────────────────────────────────────────────────────────
+function getGeminiKeys(): string[] {
+  const numbered = GEMINI_KEY_SLOTS
+    .map(k => localStorage.getItem(k)?.trim() ?? '')
+    .filter(Boolean)
+  if (numbered.length > 0) return numbered
+  const legacy = localStorage.getItem(LEGACY_KEY)?.trim() ?? ''
+  return legacy ? [legacy] : []
+}
+
+export function getGeminiKey(): string {
+  return getGeminiKeys()[0] ?? ''
 }
 
 export function saveGeminiKey(value: string) {
-  window.localStorage.setItem(STORAGE_KEY, value)
+  const v = value.trim()
+  localStorage.setItem('lifepilot_gemini_key_1', v)
+  localStorage.setItem(LEGACY_KEY, v)
 }
 
-async function fetchGemini(promptText: string) {
-  const apiKey = getGeminiKey()
-  if (!apiKey) {
-    throw new Error('Gemini API key no encontrada')
-  }
+export function hasAnyAIKey(): boolean {
+  return getGeminiKeys().length > 0 || Boolean(localStorage.getItem(GROQ_KEY_SLOT)?.trim())
+}
 
-  const response = await fetch(API_URL, {
+// ── Cooldown management ───────────────────────────────────────────────────────
+function getCooldowns(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(COOLDOWNS_KEY) ?? '{}') }
+  catch { return {} }
+}
+
+function isOnCooldown(keyId: string): boolean {
+  const ts = getCooldowns()[keyId]
+  return !!ts && Date.now() - ts < COOLDOWN_MS
+}
+
+function setCooldown(keyId: string) {
+  const cds = getCooldowns()
+  cds[keyId] = Date.now()
+  localStorage.setItem(COOLDOWNS_KEY, JSON.stringify(cds))
+}
+
+export function clearCooldowns() {
+  localStorage.removeItem(COOLDOWNS_KEY)
+}
+
+export function getActiveKeyInfo(): { provider: string; index: number } | null {
+  const geminiKeys = getGeminiKeys()
+  for (let i = 0; i < geminiKeys.length; i++) {
+    if (!isOnCooldown(`gemini_${i}`)) return { provider: 'Gemini', index: i + 1 }
+  }
+  const groqKey = localStorage.getItem(GROQ_KEY_SLOT)?.trim() ?? ''
+  if (groqKey && !isOnCooldown('groq')) return { provider: 'Groq', index: 0 }
+  return null
+}
+
+// ── API callers ───────────────────────────────────────────────────────────────
+class RateLimitError extends Error {}
+
+async function callGemini(
+  key: string,
+  prompt: string,
+  imageData?: { data: string; mimeType: string },
+): Promise<string> {
+  const parts: object[] = []
+  if (imageData) parts.push({ inlineData: { mimeType: imageData.mimeType, data: imageData.data } })
+  parts.push({ text: prompt })
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: { temperature: 0.1 },
+      }),
+    },
+  )
+
+  if (res.status === 429 || res.status === 401 || res.status === 403) {
+    throw new RateLimitError(`Gemini ${res.status}`)
+  }
+  if (!res.ok) throw new Error(`Gemini API error: ${res.status}`)
+
+  const data = await res.json()
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+}
+
+async function callGroq(key: string, prompt: string): Promise<string> {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${key}`,
     },
     body: JSON.stringify({
-      prompt: {
-        text: promptText,
-      },
-      temperature: 0.7,
-      candidateCount: 1,
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.1,
     }),
   })
 
-  if (!response.ok) {
-    const body = await response.text()
-    throw new Error(`Gemini API error: ${response.status} ${body}`)
+  if (res.status === 429 || res.status === 401) throw new RateLimitError(`Groq ${res.status}`)
+  if (!res.ok) throw new Error(`Groq API error: ${res.status}`)
+
+  const data = await res.json()
+  return data?.choices?.[0]?.message?.content ?? ''
+}
+
+// ── Main rotation function ────────────────────────────────────────────────────
+export async function callAI(
+  prompt: string,
+  imageData?: { data: string; mimeType: string },
+): Promise<string> {
+  const geminiKeys = getGeminiKeys()
+
+  for (let i = 0; i < geminiKeys.length; i++) {
+    const keyId = `gemini_${i}`
+    if (isOnCooldown(keyId)) continue
+    try {
+      return await callGemini(geminiKeys[i], prompt, imageData)
+    } catch (err) {
+      if (err instanceof RateLimitError) { setCooldown(keyId); continue }
+      throw err
+    }
   }
 
-  const data = await response.json()
-  const candidate = data?.candidates?.[0]
-  const content = candidate?.content?.map((item: any) => item?.text || '').join('')
-  return content || data?.outputText || ''
+  if (!imageData) {
+    const groqKey = localStorage.getItem(GROQ_KEY_SLOT)?.trim() ?? ''
+    if (groqKey && !isOnCooldown('groq')) {
+      try {
+        return await callGroq(groqKey, prompt)
+      } catch (err) {
+        if (err instanceof RateLimitError) setCooldown('groq')
+        else throw err
+      }
+    }
+  }
+
+  throw new Error('Sin créditos de IA disponibles. Espera 60 segundos o añade más API keys en Ajustes.')
 }
 
-export async function generateBriefing() {
-  const prompt = `Eres un asistente personal. Genera un briefing diario breve para el usuario con recomendaciones de productividad, salud y bienestar. Incluye un resumen positivo y una sugerencia de enfoque para el día.`
-  return await fetchGemini(prompt)
+// ── Test helpers ──────────────────────────────────────────────────────────────
+export async function testGeminiKey(key: string): Promise<boolean> {
+  try {
+    const result = await callGemini(key, 'Di "ok" en una palabra.')
+    return result.length > 0
+  } catch {
+    return false
+  }
 }
 
-export async function chatWithCoach(messages: AIMessage[], userMessage: string) {
+export async function testGroqKey(key: string): Promise<boolean> {
+  try {
+    const result = await callGroq(key, 'Di "ok" en una palabra.')
+    return result.length > 0
+  } catch {
+    return false
+  }
+}
+
+// ── Backward-compatible exports ───────────────────────────────────────────────
+export async function generateBriefing(): Promise<string> {
+  return callAI(
+    'Eres un asistente personal. Genera un briefing diario breve para el usuario con recomendaciones de productividad, salud y bienestar. Incluye un resumen positivo y una sugerencia de enfoque para el día.',
+  )
+}
+
+export async function chatWithCoach(messages: AIMessage[], userMessage: string): Promise<string> {
   const history = messages
-    .map((message) => {
-      const label = message.role === 'assistant' ? 'Coach' : 'Usuario'
-      return `${label}: ${message.content}`
-    })
+    .map(m => `${m.role === 'assistant' ? 'Coach' : 'Usuario'}: ${m.content}`)
     .join('\n')
-
-  const prompt = `${history}\nUsuario: ${userMessage}\nCoach:`
-  const answer = await fetchGemini(prompt)
-  return answer
+  return callAI(`${history}\nUsuario: ${userMessage}\nCoach:`)
 }

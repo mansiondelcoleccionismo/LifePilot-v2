@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Search, Flame, Loader2, Bot, Trash2, X, Camera, Check, RotateCcw } from 'lucide-react'
 import { addNutritionEntry, deleteNutritionEntry, subscribeNutritionEntries } from '@/services/nutrition.service'
 import { searchFoods, type OpenFoodResult } from '@/services/openfoodfacts.service'
-import { getGeminiKey } from '@/services/ai.service'
+import { callAI, hasAnyAIKey } from '@/services/ai.service'
 import { DAY_TARGETS, type DayType, type FoodEntry } from '@/types/nutrition'
 
 const DAY_TYPE_OPTIONS: Array<{ value: DayType; label: string; emoji: string }> = [
@@ -26,24 +26,9 @@ function getDayTypeKey() {
 async function fetchAIMacros(
   food: string,
 ): Promise<{ kcal: number; protein: number; carbs: number; fat: number } | null> {
-  const key = getGeminiKey()
-  if (!key) return null
   try {
     const prompt = `Dame macros de ${food} por 100g. Responde SOLO JSON: {"kcal":number,"protein":number,"carbs":number,"fat":number}`
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1 },
-        }),
-      },
-    )
-    if (!res.ok) return null
-    const data = await res.json()
-    const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    const text = await callAI(prompt)
     const match = text.match(/\{[\s\S]*?\}/)
     if (!match) return null
     return JSON.parse(match[0])
@@ -90,25 +75,10 @@ async function resizeAndEncode(file: File): Promise<{ data: string; mimeType: st
 }
 
 async function analyzePhoto(file: File): Promise<PhotoResult> {
-  const key = getGeminiKey()
-  if (!key) throw new Error('NO_KEY')
   const { data, mimeType } = await resizeAndEncode(file)
   const prompt = `Analiza esta foto de comida. Identifica todos los alimentos visibles y estima las cantidades en gramos. Devuelve SOLO un JSON válido con este formato exacto, sin texto adicional:
 {"descripcion":"descripción breve del plato","alimentos":[{"nombre":"nombre del alimento","gramos":0,"kcal":0,"protein":0,"carbs":0,"fat":0}],"totales":{"kcal":0,"protein":0,"carbs":0,"fat":0}}`
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ inlineData: { mimeType, data } }, { text: prompt }] }],
-        generationConfig: { temperature: 0.1 },
-      }),
-    },
-  )
-  if (!res.ok) throw new Error(`API_${res.status}`)
-  const json = await res.json()
-  const text: string = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  const text = await callAI(prompt, { data, mimeType })
   const match = text.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('NO_FOOD')
   try { return JSON.parse(match[0]) as PhotoResult }
@@ -126,7 +96,7 @@ function PhotoModal({ onClose }: { onClose: () => void }) {
   const [adding, setAdding]   = useState(false)
   const cameraRef = useRef<HTMLInputElement>(null)
   const fileRef   = useRef<HTMLInputElement>(null)
-  const hasKey    = Boolean(getGeminiKey())
+  const hasKey    = hasAnyAIKey()
 
   function handleFile(f: File) {
     setFile(f)
@@ -144,10 +114,10 @@ function PhotoModal({ onClose }: { onClose: () => void }) {
       setStep('result')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      if (msg === 'NO_KEY') {
-        setError('Configura tu API key de Gemini en Ajustes para usar esta función.')
-      } else if (msg === 'NO_FOOD' || msg === 'PARSE_ERROR') {
+      if (msg === 'NO_FOOD' || msg === 'PARSE_ERROR') {
         setError('No he podido identificar los alimentos. Intenta con mejor iluminación.')
+      } else if (msg.includes('Sin créditos')) {
+        setError('Sin créditos de IA disponibles. Configura más API keys en Ajustes.')
       } else {
         setError(`Error al analizar: ${msg}`)
       }
@@ -544,11 +514,6 @@ export function NutricionPage() {
 
   async function handleAISearch() {
     if (!searchQuery.trim()) return
-    const key = getGeminiKey()
-    if (!key) {
-      setAiError('Configura tu API Key de Gemini en Ajustes para usar esta función.')
-      return
-    }
     setAiLoading(true)
     setAiError('')
     setShowDropdown(false)
