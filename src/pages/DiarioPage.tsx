@@ -95,6 +95,7 @@ async function loadRecentDates(days = 62): Promise<Set<string>> {
 }
 
 async function seedOldData() {
+  if (localStorage.getItem('lifepilot_diary_seeded')) return
   const seeds: DiaryEntry[] = [
     {
       date: '2026-05-02', mood: 5,
@@ -123,6 +124,7 @@ async function seedOldData() {
       if (!snap.exists()) await setDoc(doc(db, COL, s.date), { ...s, updatedAt: serverTimestamp() })
     } catch { /* ignore */ }
   }
+  localStorage.setItem('lifepilot_diary_seeded', '1')
 }
 
 // ─── Stats helpers ────────────────────────────────────────────────────────────
@@ -192,9 +194,10 @@ export function DiarioPage() {
   const [saved,    setSaved]    = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  // Seed datos históricos y cargar racha
+  // Seed histórico (solo la primera vez) y racha — en paralelo
   useEffect(() => {
-    seedOldData().then(() => loadRecentDates(62).then(setRecentDates))
+    seedOldData()
+    loadRecentDates(62).then(setRecentDates)
   }, [])
 
   // Suscripción al mes activo
