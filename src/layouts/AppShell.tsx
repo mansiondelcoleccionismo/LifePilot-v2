@@ -12,7 +12,6 @@ export function AppShell() {
   const isDesktop = useIsDesktop()
   const { pathname } = useLocation()
 
-  // Cierra el menú móvil al cambiar de página
   useEffect(() => {
     setMobileMenuOpen(false)
   }, [pathname])
@@ -41,7 +40,7 @@ export function AppShell() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', stiffness: 340, damping: 32 }}
-              className="fixed left-0 top-0 bottom-0 z-50 w-72 lg:hidden bg-[#111118] border-r border-white/[0.08]"
+              className="fixed left-0 top-0 bottom-0 z-50 w-72 lg:hidden bg-[#111118] border-r border-white/8"
             >
               <Sidebar />
             </motion.div>
@@ -51,7 +50,7 @@ export function AppShell() {
 
       {/* Contenido principal */}
       <div
-        className="flex flex-col min-h-dvh transition-[padding-left] duration-[280ms]"
+        className="flex flex-col min-h-dvh transition-[padding-left] duration-280"
         style={{ paddingLeft: isDesktop ? sidebarWidth : 0 }}
       >
         <Topbar />

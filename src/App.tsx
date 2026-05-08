@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter, Routes, Route } from 'react-router-dom'
 import { AppShell } from '@/layouts/AppShell'
 import { InicioPage } from '@/pages/InicioPage'
 import { NutricionPage } from '@/pages/NutricionPage'
@@ -17,7 +17,7 @@ import { PatrimonioPage } from '@/pages/PatrimonioPage'
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route element={<AppShell />}>
           <Route index           element={<InicioPage />} />
@@ -36,6 +36,6 @@ export default function App() {
           <Route path="ajustes"    element={<AjustesPage />} />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   )
 }

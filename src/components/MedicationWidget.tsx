@@ -163,7 +163,7 @@ export function MedicationWidget() {
                 <select
                   value={unit}
                   onChange={(e) => setUnit(e.target.value as MedicationUnit)}
-                  className="rounded-xl bg-[#1a1a24] border border-white/8 px-2 py-2 text-xs text-white/80 focus:outline-none"
+                  className="rounded-xl bg-white/5 border border-white/8 px-2 py-2 text-xs text-white/80 focus:outline-none"
                 >
                   {(['mg', 'ml', 'UI', 'g'] as MedicationUnit[]).map((u) => (
                     <option key={u} value={u}>{u}</option>
@@ -172,7 +172,7 @@ export function MedicationWidget() {
                 <select
                   value={time}
                   onChange={(e) => setTime(e.target.value as MedicationTime)}
-                  className="rounded-xl bg-[#1a1a24] border border-white/8 px-2 py-2 text-xs text-white/80 focus:outline-none"
+                  className="rounded-xl bg-white/5 border border-white/8 px-2 py-2 text-xs text-white/80 focus:outline-none"
                 >
                   <option value="mañana">☀️ Mañana</option>
                   <option value="mediodía">🌤️ Mediodía</option>

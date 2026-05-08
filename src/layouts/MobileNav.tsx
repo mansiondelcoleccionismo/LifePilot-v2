@@ -6,7 +6,7 @@ export function MobileNav() {
   const { pathname } = useLocation()
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-30 flex lg:hidden h-16 bg-[#111118]/90 backdrop-blur-2xl border-t border-white/[0.08]">
+    <nav className="fixed bottom-0 left-0 right-0 z-30 flex lg:hidden h-16 bg-[#111118]/90 backdrop-blur-2xl border-t border-white/8">
       {MOBILE_NAV_ITEMS.map((item) => {
         const Icon = item.icon
         const isActive = item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)
@@ -20,7 +20,7 @@ export function MobileNav() {
             {isActive && (
               <motion.div
                 layoutId="mobile-active"
-                className="absolute top-2 inset-x-2 h-9 rounded-[10px] bg-white/[0.08]"
+                className="absolute top-2 inset-x-2 h-9 rounded-[10px] bg-white/8"
                 transition={{ type: 'spring', stiffness: 400, damping: 32 }}
               />
             )}

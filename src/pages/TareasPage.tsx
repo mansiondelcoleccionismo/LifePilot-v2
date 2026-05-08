@@ -61,13 +61,13 @@ export function TareasPage() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
           placeholder="Nueva tarea..."
-          className="flex-1 h-10 px-4 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white/80 placeholder:text-white/25 text-sm focus:outline-none focus:border-blue-500/50 transition-colors"
+          className="flex-1 h-10 px-4 rounded-xl bg-white/6 border border-white/8 text-white/80 placeholder:text-white/25 text-sm focus:outline-none focus:border-blue-500/50 transition-colors"
         />
         {/* Priority selector */}
         <select
           value={priority}
           onChange={(e) => setPriority(e.target.value as Task['priority'])}
-          className="h-10 px-3 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white/60 text-xs focus:outline-none cursor-pointer"
+          className="h-10 px-3 rounded-xl bg-white/6 border border-white/8 text-white/60 text-xs focus:outline-none cursor-pointer"
         >
           <option value="low">Baja</option>
           <option value="medium">Media</option>
@@ -140,7 +140,7 @@ function TaskItem({ task }: { task: Task }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="flex items-center gap-3 p-4 rounded-2xl bg-[#1E1E28] border border-white/[0.08] group"
+      className="flex items-center gap-3 p-4 rounded-2xl bg-[#1E1E28] border border-white/8 group"
     >
       {/* Checkbox */}
       <button

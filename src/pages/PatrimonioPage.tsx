@@ -158,7 +158,7 @@ export function PatrimonioPage() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05 }}
-        className="mb-6 rounded-3xl bg-gradient-to-br from-amber-950/50 to-[#1E1E28] border border-amber-800/30 p-7"
+        className="mb-6 rounded-3xl bg-linear-to-br from-amber-950/50 to-[#1E1E28] border border-amber-800/30 p-7"
       >
         <p className="text-[10px] font-semibold tracking-widest uppercase text-amber-500/70 mb-2">
           Patrimonio total

@@ -384,7 +384,7 @@ export function MedicacionPage() {
                     <select
                       value={formUnit}
                       onChange={(e) => setFormUnit(e.target.value as MedicationUnit)}
-                      className="mt-2 w-full rounded-2xl bg-[#16161f] border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
+                      className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
                     >
                       {(['mg', 'ml', 'UI', 'g'] as MedicationUnit[]).map((u) => (
                         <option key={u} value={u}>{u}</option>
