@@ -1,9 +1,38 @@
-function App() {
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { AppShell } from '@/layouts/AppShell'
+import { InicioPage } from '@/pages/InicioPage'
+
+function Placeholder({ title }: { title: string }) {
   return (
-    <div className="flex h-screen items-center justify-center bg-slate-900 text-white">
-      <h1 className="text-4xl font-bold italic">LifePilot V2 - ¡Sistema Listo! 🚀</h1>
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="text-center">
+        <p className="text-4xl mb-4">🚧</p>
+        <h2 className="text-xl font-semibold text-white/70">{title}</h2>
+        <p className="text-sm text-white/30 mt-2">Módulo en construcción</p>
+      </div>
     </div>
   )
 }
 
-export default App
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route index element={<InicioPage />} />
+          <Route path="nutricion"  element={<Placeholder title="Nutrición" />} />
+          <Route path="ejercicios" element={<Placeholder title="Ejercicios" />} />
+          <Route path="tareas"     element={<Placeholder title="Tareas" />} />
+          <Route path="calendario" element={<Placeholder title="Calendario" />} />
+          <Route path="ocio"       element={<Placeholder title="Ocio" />} />
+          <Route path="kira"       element={<Placeholder title="Kira" />} />
+          <Route path="planes"     element={<Placeholder title="Planes" />} />
+          <Route path="aprender"   element={<Placeholder title="Aprender" />} />
+          <Route path="diario"     element={<Placeholder title="Diario" />} />
+          <Route path="ia"         element={<Placeholder title="IA" />} />
+          <Route path="ajustes"    element={<Placeholder title="Ajustes" />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  )
+}

@@ -1,0 +1,71 @@
+import { useLocation } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { Search, Bell, Moon, Sun, Menu } from 'lucide-react'
+import { useUIStore } from '@/store/ui.store'
+import { ALL_NAV_ITEMS } from '@/lib/navigation'
+
+function getPageInfo(pathname: string) {
+  const emojis: Record<string, string> = {
+    '/': '🏠', '/nutricion': '🥗', '/ejercicios': '💪',
+    '/tareas': '✅', '/calendario': '📅', '/ocio': '🎬',
+    '/kira': '👧', '/planes': '📍', '/aprender': '🧠',
+    '/diario': '📝', '/ia': '✨', '/ajustes': '⚙️',
+  }
+  if (pathname === '/') return { label: 'Inicio', emoji: '🏠' }
+  const item = ALL_NAV_ITEMS.find((i) => i.path !== '/' && pathname.startsWith(i.path))
+  return { label: item?.label ?? 'LifePilot', emoji: emojis[item?.path ?? ''] ?? '⚡' }
+}
+
+export function Topbar() {
+  const { pathname } = useLocation()
+  const { setMobileMenuOpen, sidebarCollapsed } = useUIStore()
+  const { label, emoji } = getPageInfo(pathname)
+
+  return (
+    <header
+      className="fixed top-0 right-0 z-20 h-14 flex items-center px-4 gap-3 bg-[#09090E]/80 backdrop-blur-xl border-b border-white/[0.08] transition-[left] duration-[280ms]"
+      style={{ left: typeof window !== 'undefined' && window.innerWidth >= 1024 ? (sidebarCollapsed ? 64 : 240) : 0 }}
+    >
+      {/* Mobile menu button */}
+      <button
+        className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg text-white/50 hover:text-white/80 hover:bg-white/[0.06] transition-colors"
+        onClick={() => setMobileMenuOpen(true)}
+      >
+        <Menu size={18} />
+      </button>
+
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <span className="text-base">{emoji}</span>
+        <motion.h1
+          key={pathname}
+          initial={{ opacity: 0, x: -6 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.2 }}
+          className="text-sm font-semibold text-white/80 truncate"
+        >
+          {label}
+        </motion.h1>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-1">
+        <button className="hidden md:flex items-center gap-2 h-8 px-3 rounded-lg bg-white/[0.05] border border-white/[0.08] text-white/35 hover:text-white/60 text-xs transition-colors">
+          <Search size={13} />
+          <span>Buscar</span>
+          <kbd className="bg-white/[0.08] px-1.5 py-0.5 rounded text-[10px] font-mono">⌘K</kbd>
+        </button>
+        <button className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white/70 hover:bg-white/[0.06] transition-colors">
+          <Moon size={15} />
+        </button>
+        <button className="relative w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white/70 hover:bg-white/[0.06] transition-colors">
+          <Bell size={15} />
+          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-blue-400" />
+        </button>
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-xs font-semibold cursor-pointer ring-2 ring-white/[0.08]">
+          D
+        </div>
+      </div>
+    </header>
+  )
+}

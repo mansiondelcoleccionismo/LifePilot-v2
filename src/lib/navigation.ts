@@ -1,0 +1,37 @@
+import { Home, Salad, Dumbbell, CheckSquare, CalendarDays, Clapperboard, Baby, Map, BookOpen, NotebookPen, Sparkles, Settings } from 'lucide-react'
+
+export const NAV_GROUPS = [
+  {
+    id: 'main',
+    label: 'Principal',
+    items: [
+      { id: 'inicio',      label: 'Inicio',      icon: Home,         path: '/',           mobileVisible: true },
+      { id: 'nutricion',   label: 'Nutrición',   icon: Salad,        path: '/nutricion',  mobileVisible: true },
+      { id: 'ejercicios',  label: 'Ejercicios',  icon: Dumbbell,     path: '/ejercicios', mobileVisible: true },
+      { id: 'tareas',      label: 'Tareas',      icon: CheckSquare,  path: '/tareas',     mobileVisible: true, badge: 3 },
+      { id: 'calendario',  label: 'Calendario',  icon: CalendarDays, path: '/calendario', mobileVisible: true },
+    ],
+  },
+  {
+    id: 'personal',
+    label: 'Personal',
+    items: [
+      { id: 'ocio',      label: 'Ocio',     icon: Clapperboard, path: '/ocio' },
+      { id: 'kira',      label: 'Kira',     icon: Baby,         path: '/kira' },
+      { id: 'planes',    label: 'Planes',   icon: Map,          path: '/planes' },
+      { id: 'aprender',  label: 'Aprender', icon: BookOpen,     path: '/aprender' },
+      { id: 'diario',    label: 'Diario',   icon: NotebookPen,  path: '/diario' },
+    ],
+  },
+  {
+    id: 'system',
+    label: 'Sistema',
+    items: [
+      { id: 'ia',       label: 'IA',      icon: Sparkles, path: '/ia' },
+      { id: 'ajustes',  label: 'Ajustes', icon: Settings, path: '/ajustes' },
+    ],
+  },
+]
+
+export const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items)
+export const MOBILE_NAV_ITEMS = ALL_NAV_ITEMS.filter((i) => i.mobileVisible)
