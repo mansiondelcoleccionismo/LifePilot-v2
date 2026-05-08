@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
+import { Zap, X } from 'lucide-react'
 import { useUIStore } from '@/store/ui.store'
 import { useIsDesktop } from '@/hooks/useMediaQuery'
-import { Sidebar } from './Sidebar'
+import { Sidebar, SidebarContent } from './Sidebar'
 import { Topbar } from './Topbar'
 import { MobileNav } from './MobileNav'
 
@@ -40,9 +41,29 @@ export function AppShell() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', stiffness: 340, damping: 32 }}
-              className="fixed left-0 top-0 bottom-0 z-50 w-72 lg:hidden bg-[#111118] border-r border-white/8"
+              className="fixed left-0 top-0 bottom-0 z-50 w-72 lg:hidden bg-[#111118] border-r border-white/8 flex flex-col"
             >
-              <Sidebar />
+              {/* Header del drawer móvil */}
+              <div className="flex items-center justify-between px-4 h-14 border-b border-white/8 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                    <Zap size={14} className="text-white fill-white" />
+                  </div>
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-sm font-semibold text-white/90">LifePilot</span>
+                    <span className="text-[10px] text-white/30 uppercase tracking-widest">v2.0</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition"
+                >
+                  <X size={16} className="text-white/60" />
+                </button>
+              </div>
+
+              {/* Nav items — SidebarContent nunca tiene "hidden lg:flex" */}
+              <SidebarContent />
             </motion.div>
           </>
         )}
