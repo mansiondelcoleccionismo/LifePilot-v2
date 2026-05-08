@@ -312,6 +312,26 @@ function getTodayDayIndex() {
 }
 
 // ─── Firebase ─────────────────────────────────────────────────────────────────
+
+// Mapeo de IDs nuevos (guión) → IDs del LifePilot HTML antiguo (guión bajo)
+const OLD_ID_MAP: Record<string, string> = {
+  'curl-biceps': 'curl_biceps',
+  'curl-martillo': 'curl_martillo',
+  'remo-mancuerna': 'remo_mancuerna',
+  'sentadilla-goblet': 'sentadilla_goblet',
+  'sentadilla-bulgara': 'sentadilla_bulgara',
+  'peso-muerto-rumano': 'peso_muerto_rumano',
+  'puente-gluteos': 'puente_gluteo',
+  'flexiones': 'flexiones',
+  'press-hombros': 'press_hombro',
+  'elevaciones-laterales': 'elevacion_lateral',
+  'extension-triceps': 'extension_triceps',
+  'sentadilla-mancuernas': 'sentadilla_libre',
+  'zancadas': 'zancada',
+  'plancha': 'plancha',
+  'mountain-climbers': 'mountain_climber',
+}
+
 async function loadWeightsForDay(exercises: ExerciseDef[]): Promise<Record<string, number>> {
   const result: Record<string, number> = {}
   await Promise.all(exercises.map(async (ex) => {
@@ -323,9 +343,35 @@ async function loadWeightsForDay(exercises: ExerciseDef[]): Promise<Record<strin
 
 async function loadConfigsForDay(exercises: ExerciseDef[]): Promise<Record<string, ExerciseConfig>> {
   const result: Record<string, ExerciseConfig> = {}
+
+  // Carga config antigua del LifePilot HTML (colección "config", doc "ejercicios")
+  // para migrar automáticamente los vídeos de YouTube ya configurados
+  let oldFirebase: Record<string, any> = {}
+  try {
+    const oldSnap = await getDoc(doc(db, 'config', 'ejercicios'))
+    if (oldSnap.exists()) oldFirebase = oldSnap.data()
+  } catch { /* sin datos antiguos, no pasa nada */ }
+
   await Promise.all(exercises.map(async (ex) => {
     const snap = await getDoc(doc(db, 'exercise_config', ex.id))
-    if (snap.exists()) result[ex.id] = snap.data() as ExerciseConfig
+    if (snap.exists()) {
+      result[ex.id] = snap.data() as ExerciseConfig
+    } else {
+      // Buscar en el formato antiguo y migrar si hay datos
+      const oldId = OLD_ID_MAP[ex.id]
+      const oldData = oldId ? oldFirebase[oldId] : null
+      if (oldData) {
+        const repsRaw = String(oldData.reps ?? '')
+        const config: ExerciseConfig = {
+          videoUrl: oldData.video_url || undefined,
+          sets: oldData.series ? Number(oldData.series) : undefined,
+          reps: repsRaw ? parseInt(repsRaw) || undefined : undefined,
+        }
+        result[ex.id] = config
+        // Migrar al nuevo formato automáticamente (silencioso)
+        persistConfig(ex.id, config).catch(() => {})
+      }
+    }
   }))
   return result
 }
