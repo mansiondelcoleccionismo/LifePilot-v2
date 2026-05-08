@@ -4,6 +4,7 @@ import { InicioPage } from '@/pages/InicioPage'
 import { NutricionPage } from '@/pages/NutricionPage'
 import { EjerciciosPage } from '@/pages/EjerciciosPage'
 import { DiarioPage } from '@/pages/DiarioPage'
+import { IAPage } from '@/pages/IAPage'
 import { TareasPage } from '@/pages/TareasPage'
 
 function Placeholder({ title }: { title: string }) {
@@ -33,7 +34,7 @@ export default function App() {
           <Route path="planes"     element={<Placeholder title="Planes" />} />
           <Route path="aprender"   element={<Placeholder title="Aprender" />} />
           <Route path="diario"     element={<DiarioPage />} />
-          <Route path="ia"         element={<Placeholder title="IA" />} />
+          <Route path="ia"         element={<IAPage />} />
           <Route path="ajustes"    element={<Placeholder title="Ajustes" />} />
         </Route>
       </Routes>
