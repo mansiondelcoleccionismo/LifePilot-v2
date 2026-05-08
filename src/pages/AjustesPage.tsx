@@ -13,7 +13,7 @@ interface ProfileData {
   goal: GoalType
 }
 
-interface CustomMacros {
+type CustomMacros = {
   [key in DayType]: MacroTarget
 }
 
