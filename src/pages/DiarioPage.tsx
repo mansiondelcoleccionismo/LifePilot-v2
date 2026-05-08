@@ -4,7 +4,7 @@ import {
   ArrowLeft, ArrowRight, CalendarDays, Check, Flame, Trash2, TrendingUp,
 } from 'lucide-react'
 import {
-  collection, deleteDoc, doc, getDocs, getDoc, onSnapshot,
+  collection, deleteDoc, doc, getDocs, onSnapshot,
   query, serverTimestamp, setDoc, where,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -57,10 +57,13 @@ function formatFullDate(ds: string) {
 // ─── Firebase ─────────────────────────────────────────────────────────────────
 const COL = 'diary_entries'
 
-function subscribeMonth(y: number, m: number, cb: (entries: DiaryEntry[]) => void) {
+function subscribeMonth(
+  y: number, m: number,
+  cb: (entries: DiaryEntry[]) => void,
+  onErr?: () => void,
+) {
   const start = toDateStr(y, m, 1)
   const end   = toDateStr(y, m, new Date(y, m + 1, 0).getDate())
-  // Sin orderBy para evitar necesidad de índice compuesto — ordenamos en cliente
   const q = query(
     collection(db, COL),
     where('date', '>=', start),
@@ -72,9 +75,10 @@ function subscribeMonth(y: number, m: number, cb: (entries: DiaryEntry[]) => voi
       const entries = snap.docs
         .map((d) => d.data() as DiaryEntry)
         .sort((a, b) => a.date.localeCompare(b.date))
+      console.log('[Diario] subscribeMonth OK:', entries.length, 'entradas')
       cb(entries)
     },
-    (err) => { console.error('[Diario] subscribeMonth error:', err); cb([]) },
+    (err) => { console.error('[Diario] subscribeMonth ERROR:', err); onErr?.(); cb([]) },
   )
 }
 
@@ -129,13 +133,14 @@ async function seedOldData() {
   ]
   try {
     for (const s of seeds) {
-      const snap = await getDoc(doc(db, COL, s.date))
-      if (!snap.exists()) await setDoc(doc(db, COL, s.date), { ...s, updatedAt: serverTimestamp() })
+      // setDoc con merge:true para no sobreescribir si el usuario ya editó esa entrada
+      await setDoc(doc(db, COL, s.date), { ...s, updatedAt: serverTimestamp() }, { merge: true })
+      console.log('[Diario] seed OK:', s.date)
     }
     localStorage.setItem(SEED_KEY, '1')
+    console.log('[Diario] seed completo')
   } catch (err) {
-    console.error('[Diario] seed error:', err)
-    // No marcamos como hecho: lo reintentará la próxima vez
+    console.error('[Diario] seed error (reintentará la próxima vez):', err)
   }
 }
 
@@ -205,6 +210,7 @@ export function DiarioPage() {
   const [saving,   setSaving]   = useState(false)
   const [saved,    setSaved]    = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [fbStatus, setFbStatus] = useState<'loading' | 'ok' | 'error'>('loading')
 
   // Seed histórico (solo la primera vez) y racha — en paralelo
   useEffect(() => {
@@ -214,7 +220,12 @@ export function DiarioPage() {
 
   // Suscripción al mes activo
   useEffect(() => {
-    return subscribeMonth(year, month, setEntries)
+    setFbStatus('loading')
+    return subscribeMonth(
+      year, month,
+      (data) => { setEntries(data); setFbStatus('ok') },
+      () => setFbStatus('error'),
+    )
   }, [year, month])
 
   // Mapa rápido fecha → entrada
@@ -280,6 +291,11 @@ export function DiarioPage() {
     <div className="px-4 py-6 md:px-6 lg:px-8 max-w-3xl mx-auto">
 
       {/* Header */}
+      {fbStatus === 'error' && (
+        <div className="mb-4 rounded-xl bg-rose-500/10 border border-rose-500/20 px-4 py-2.5 text-sm text-rose-300">
+          ⚠️ Error conectando con Firebase — revisa la consola (F12)
+        </div>
+      )}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
         <p className="text-sm text-white/35">Diario · Registro emocional</p>
         <h1 className="text-3xl font-bold text-white/90 mt-1">Tu diario</h1>
