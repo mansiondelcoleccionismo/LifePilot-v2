@@ -207,7 +207,7 @@ export function PlanesPage() {
               </div>
             </div>
           </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+          <div className="flex gap-1 transition opacity-100 md:opacity-0 md:group-hover:opacity-100">
             <button
               onClick={() => handleEditPlan(plan)}
               className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition"
@@ -482,7 +482,7 @@ export function PlanesPage() {
                         <input
                           value={step}
                           onChange={(e) => updateStepField(index, e.target.value)}
-                          className="flex-1 rounded-2xl bg-white/5 border border-white/8 px-4 py-2 text-sm text-white/80 focus:outline-none"
+                          className="flex-1 rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
                           placeholder={`Paso ${index + 1}`}
                         />
                         {planSteps.length > 1 && (

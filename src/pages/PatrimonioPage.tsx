@@ -233,7 +233,7 @@ export function PatrimonioPage() {
                 const cfg = TYPE_CFG[type]
                 return (
                   <div key={type}>
-                    <p className={`text-[9px] font-semibold uppercase tracking-widest mb-2 ${cfg.color}`}>
+                    <p className={`text-[10px] font-semibold uppercase tracking-widest mb-2 ${cfg.color}`}>
                       {cfg.label}
                     </p>
                     <div className="space-y-1.5">
@@ -246,7 +246,7 @@ export function PatrimonioPage() {
                           <span className="text-xs text-white/50 shrink-0">
                             {fmtFull(asset.value, asset.currency)}
                           </span>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+                          <div className="flex gap-1 transition shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100">
                             <button
                               onClick={() => openEdit(asset)}
                               className="w-5 h-5 rounded-md bg-white/8 hover:bg-white/14 flex items-center justify-center transition"
@@ -351,7 +351,7 @@ export function PatrimonioPage() {
               initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.92, opacity: 0 }}
-              className="w-full max-w-sm rounded-3xl border border-white/8 bg-[#1E1E28] p-6"
+              className="w-full max-w-sm rounded-3xl border border-white/8 bg-[#1E1E28] p-6 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">

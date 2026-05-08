@@ -92,13 +92,13 @@ export function EjerciciosPage() {
           </div>
           <div className="text-sm text-white/45">Los ejercicios se cargan en tiempo real</div>
         </div>
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-7 gap-1">
           {weekDays.map((item) => (
             <button
               key={item.value}
               type="button"
               onClick={() => setDay(item.value)}
-              className={`rounded-2xl border px-2 py-3 text-sm font-medium transition-colors ${
+              className={`rounded-2xl border px-1 py-3 text-xs font-medium transition-colors ${
                 day === item.value
                   ? 'border-blue-500/40 bg-blue-500/10 text-white'
                   : 'border-white/8 bg-white/5 text-white/60 hover:border-white/14'

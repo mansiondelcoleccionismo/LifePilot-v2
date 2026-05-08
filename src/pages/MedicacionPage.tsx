@@ -248,7 +248,7 @@ export function MedicacionPage() {
                             <span className="text-xs text-white/40 shrink-0">
                               {med.dose} {med.unit}
                             </span>
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                            <div className="flex gap-1 transition opacity-100 md:opacity-0 md:group-hover:opacity-100">
                               <button
                                 onClick={() => openEdit(med)}
                                 className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition"
@@ -284,7 +284,7 @@ export function MedicacionPage() {
           <p className="text-[10px] font-semibold tracking-widest uppercase text-white/25 mb-4">
             Últimos 7 días
           </p>
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1">
             {mergedWeekHistory.map(({ date, label, dayNum, logs }) => {
               const taken = medications.filter((m) => logs[m.id]?.taken).length
               const total = medications.length
@@ -304,7 +304,7 @@ export function MedicacionPage() {
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-semibold ${colorClass}`}>
                     {dayNum}
                   </div>
-                  <span className="text-[9px] text-white/25">{taken}/{total}</span>
+                  <span className="text-[10px] text-white/25">{taken}/{total}</span>
                 </div>
               )
             })}
@@ -341,7 +341,7 @@ export function MedicacionPage() {
               initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.92, opacity: 0 }}
-              className="w-full max-w-sm rounded-3xl border border-white/8 bg-[#1E1E28] p-6"
+              className="w-full max-w-sm rounded-3xl border border-white/8 bg-[#1E1E28] p-6 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">

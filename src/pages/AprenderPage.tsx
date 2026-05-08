@@ -266,7 +266,7 @@ export function AprenderPage() {
               </div>
             </div>
           </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+          <div className="flex gap-1 transition opacity-100 md:opacity-0 md:group-hover:opacity-100">
             <button
               onClick={() => handleEditItem(item)}
               className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition"
@@ -356,9 +356,9 @@ export function AprenderPage() {
 
       {/* Status Filter */}
       <div className="mb-6">
-        <div className="flex items-center gap-3">
-          <Filter size={16} className="text-white/40" />
-          <div className="flex gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter size={16} className="text-white/40 shrink-0" />
+          <div className="flex gap-2 flex-wrap">
             {statusOptions.map(option => (
               <button
                 key={option.value}
@@ -422,7 +422,7 @@ export function AprenderPage() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-md rounded-3xl border border-white/8 bg-[#1E1E28] p-6"
+              className="w-full max-w-md rounded-3xl border border-white/8 bg-[#1E1E28] p-6 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
