@@ -6,6 +6,7 @@ import { useToday } from '@/hooks/useToday'
 import { subscribeNutritionEntries } from '@/services/nutrition.service'
 import { subscribeCalendarEvents } from '@/services/calendar.service'
 import { subscribeDiaryEntries } from '@/services/diary.service'
+import { MedicationWidget } from '@/components/MedicationWidget'
 import type { FoodEntry } from '@/types/nutrition'
 import type { CalendarEvent } from '@/types/event'
 import type { DiaryEntry } from '@/types/diary'
@@ -250,7 +251,11 @@ export function InicioPage() {
           </div>
         </Card>
 
-        <Card className="md:col-span-2 lg:col-span-3">
+        <Card>
+          <MedicationWidget />
+        </Card>
+
+        <Card className="md:col-span-2 lg:col-span-2">
           <div className="flex items-center gap-2 mb-3">
             <Calendar size={14} className="text-cyan-400" />
             <Label>Próximos eventos · Hoy</Label>

@@ -12,6 +12,7 @@ import { AprenderPage } from '@/pages/AprenderPage'
 import { PlanesPage } from '@/pages/PlanesPage'
 import { OcioPage } from '@/pages/OcioPage'
 import { TareasPage } from '@/pages/TareasPage'
+import { MedicacionPage } from '@/pages/MedicacionPage'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="nutricion"  element={<NutricionPage />} />
           <Route path="ejercicios" element={<EjerciciosPage />} />
           <Route path="tareas"     element={<TareasPage />} />
+          <Route path="medicacion" element={<MedicacionPage />} />
           <Route path="calendario" element={<CalendarioPage />} />
           <Route path="ocio"       element={<OcioPage />} />
           <Route path="kira"       element={<KiraPage />} />
