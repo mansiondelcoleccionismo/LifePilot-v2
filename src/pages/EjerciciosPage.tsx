@@ -783,7 +783,7 @@ function HistoryTab({ history }: { history: HistoryEntry[] }) {
 }
 
 // ─── ProgramTab ───────────────────────────────────────────────────────────────
-function ProgramTab() {
+function ProgramTab({ onSelect }: { onSelect: (idx: number) => void }) {
   const principles = [
     ['📈', 'Progresión de carga', 'Cuando completes 3×12 dos semanas seguidas, sube 0.5-1kg. Así construyes músculo de forma constante.'],
     ['🔁', 'Sobrecarga progresiva', 'El músculo solo crece si le das un estímulo mayor que la semana anterior. Más peso, reps o series.'],
@@ -797,18 +797,23 @@ function ProgramTab() {
         <h3 className="font-semibold text-white/90 mb-1">Tu programa — 4 días / semana</h3>
         <p className="text-sm text-white/45 mb-4">Diseñado para recomposición corporal con mancuernas en casa.</p>
         <div className="space-y-2">
-          {PROGRAM.map((day) => (
-            <div key={day.day} className={`flex items-start gap-3 rounded-xl p-3 ${day.type === 'workout' ? 'bg-white/5' : 'bg-white/2'}`}>
-              <span className="w-8 text-xs font-bold text-white/35 shrink-0 mt-0.5">{day.shortLabel}</span>
-              {day.type === 'workout' ? (
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-white/80">{day.focus}</p>
+          {PROGRAM.map((day, idx) => (
+            day.type === 'workout' ? (
+              <button key={day.day} type="button" onClick={() => onSelect(idx)}
+                className="w-full flex items-center gap-3 rounded-xl p-3 bg-white/5 hover:bg-white/9 active:bg-white/12 transition text-left group">
+                <span className="w-8 text-xs font-bold text-white/35 shrink-0">{day.shortLabel}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-white/80 group-hover:text-white/95 transition">{day.focus}</p>
                   <p className="text-xs text-white/35 mt-0.5">{day.exercises.map((e) => e.name).join(' · ')}</p>
                 </div>
-              ) : (
+                <ChevronDown size={14} className="text-white/25 group-hover:text-white/50 transition -rotate-90 shrink-0" />
+              </button>
+            ) : (
+              <div key={day.day} className="flex items-start gap-3 rounded-xl p-3 bg-white/2">
+                <span className="w-8 text-xs font-bold text-white/20 shrink-0 mt-0.5">{day.shortLabel}</span>
                 <p className="text-sm text-white/25 mt-0.5">Descanso activo — recuperación</p>
-              )}
-            </div>
+              </div>
+            )
           ))}
         </div>
       </div>
@@ -1123,7 +1128,9 @@ export function EjerciciosPage() {
       )}
 
       {activeTab === 'history' && <HistoryTab history={history} />}
-      {activeTab === 'program' && <ProgramTab />}
+      {activeTab === 'program' && (
+        <ProgramTab onSelect={(idx) => { setDayIdx(idx); setActiveTab('workout') }} />
+      )}
       {activeTab === 'config' && (
         dayProgram.type === 'workout' ? (
           <ConfigTab dayProgram={dayProgram} configs={configs} onSaveConfig={handleSaveConfig} />
