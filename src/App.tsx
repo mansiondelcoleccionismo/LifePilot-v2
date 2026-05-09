@@ -14,6 +14,7 @@ import { OcioPage } from '@/pages/OcioPage'
 import { TareasPage } from '@/pages/TareasPage'
 import { MedicacionPage } from '@/pages/MedicacionPage'
 import { PatrimonioPage } from '@/pages/PatrimonioPage'
+import { PerfilPage } from '@/pages/PerfilPage'
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="diario"     element={<DiarioPage />} />
           <Route path="ia"         element={<IAPage />} />
           <Route path="ajustes"    element={<AjustesPage />} />
+          <Route path="perfil"     element={<PerfilPage />} />
         </Route>
       </Routes>
     </HashRouter>
