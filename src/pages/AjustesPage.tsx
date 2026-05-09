@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { User, Key, Apple, Palette, Database, Save, Download, Loader2 } from 'lucide-react'
+import { User, Key, Apple, Palette, Database, Save, Download, Loader2, Bell } from 'lucide-react'
 import { DAY_TARGETS, type DayType, type MacroTarget } from '@/types/nutrition'
 import { getActiveKeyInfo, testGeminiKey, testGroqKey, clearCooldowns } from '@/services/ai.service'
+import {
+  type NotificationSettings,
+  type Reminder,
+  loadNotificationSettings,
+  saveNotificationSettings,
+  requestPermission,
+} from '@/services/notifications.service'
 
 interface AIKeyConfig {
   id: string
@@ -42,6 +49,25 @@ const STORAGE_KEYS = {
   theme: 'lifepilot_theme',
 }
 
+const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+
+const REMINDER_META: Record<string, { label: string; emoji: string; description: string }> = {
+  metrics:     { label: 'Métricas semanales',  emoji: '⚖️', description: 'Recordatorio para registrar peso y medidas' },
+  med_morning: { label: 'Medicación mañana',   emoji: '💊', description: 'Recordatorio de medicación matutina' },
+  med_night:   { label: 'Medicación noche',    emoji: '💊', description: 'Recordatorio de medicación nocturna' },
+  diary:       { label: 'Diario del día',       emoji: '📝', description: 'Recordatorio para registrar tu estado de ánimo' },
+  kira:        { label: 'Tiempo con Kira',     emoji: '👧', description: 'Aviso 15 min antes de llegar a casa' },
+}
+
+function toTimeStr(h: number, m: number) {
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+function fromTimeStr(s: string): { hour: number; minute: number } {
+  const [h, m] = s.split(':').map(Number)
+  return { hour: h ?? 0, minute: m ?? 0 }
+}
+
 const defaultProfile: ProfileData = {
   name: '',
   weight: '',
@@ -56,6 +82,11 @@ export function AjustesPage() {
   const [aiKeyValues, setAiKeyValues] = useState<Record<string, string>>({})
   const [testStates, setTestStates] = useState<Record<string, 'idle' | 'testing' | 'ok' | 'fail'>>({})
   const [activeKeyInfo, setActiveKeyInfo] = useState<{ provider: string; index: number } | null>(null)
+  const [notifSettings, setNotifSettings] = useState<NotificationSettings>(() => loadNotificationSettings())
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
+    'Notification' in window ? Notification.permission : 'denied',
+  )
+  const notifSupported = 'Notification' in window
   const [customMacros, setCustomMacros] = useState<CustomMacros>(defaultMacros)
   const [theme, setTheme] = useState<ThemeType>('oscuro')
   const [feedback, setFeedback] = useState('')
@@ -117,6 +148,26 @@ export function AjustesPage() {
     } catch { ok = false }
     setTestStates(prev => ({ ...prev, [cfg.id]: ok ? 'ok' : 'fail' }))
     setTimeout(() => setTestStates(prev => ({ ...prev, [cfg.id]: 'idle' })), 4000)
+  }
+
+  const updateReminder = (id: string, patch: Partial<Reminder>) => {
+    setNotifSettings(prev => {
+      const updated: NotificationSettings = {
+        reminders: prev.reminders.map(r => r.id === id ? { ...r, ...patch } : r),
+      }
+      saveNotificationSettings(updated)
+      return updated
+    })
+  }
+
+  const handleRequestPermission = async () => {
+    const result = await requestPermission()
+    setNotifPermission(result)
+    if (result === 'granted') {
+      saveNotificationSettings(notifSettings)
+      setFeedback('Notificaciones activadas')
+      setTimeout(() => setFeedback(''), 2400)
+    }
   }
 
   const saveMacros = () => {
@@ -406,6 +457,134 @@ export function AjustesPage() {
             >
               Restablecer
             </button>
+          </div>
+        </section>
+
+        {/* Recordatorios */}
+        <section className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-violet-500/10 flex items-center justify-center">
+              <Bell size={20} className="text-violet-300" />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">Recordatorios</p>
+              <h2 className="text-lg font-semibold text-white/90 mt-1">Notificaciones push</h2>
+            </div>
+          </div>
+
+          {/* Permission banner */}
+          {!notifSupported ? (
+            <div className="rounded-2xl bg-white/4 border border-white/8 p-4 text-sm text-white/40">
+              Tu navegador no soporta notificaciones push.
+            </div>
+          ) : notifPermission === 'denied' ? (
+            <div className="rounded-2xl bg-rose-500/8 border border-rose-500/15 p-4 mb-4">
+              <p className="text-sm font-semibold text-rose-300 mb-1">Notificaciones bloqueadas</p>
+              <p className="text-xs text-rose-300/60 leading-relaxed">
+                Para activarlas, haz clic en el candado 🔒 en la barra de direcciones, busca
+                "Notificaciones" y cambia el permiso a "Permitir". Luego recarga la página.
+              </p>
+            </div>
+          ) : notifPermission === 'default' ? (
+            <div className="rounded-2xl bg-violet-500/8 border border-violet-500/15 p-4 mb-4 flex items-center justify-between gap-4">
+              <p className="text-sm text-violet-200/70 leading-snug">
+                Activa los permisos para recibir recordatorios aunque la app esté en segundo plano.
+              </p>
+              <button
+                onClick={handleRequestPermission}
+                className="shrink-0 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-violet-500 transition"
+              >
+                Activar
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-emerald-500/8 border border-emerald-500/15 px-4 py-2.5 mb-4 text-xs text-emerald-400 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+              Notificaciones activas
+            </div>
+          )}
+
+          {/* Reminder rows */}
+          <div className="space-y-3">
+            {notifSettings.reminders.map((reminder) => {
+              const meta = REMINDER_META[reminder.id]
+              if (!meta) return null
+              const isWeekly = reminder.dayOfWeek !== undefined
+              const disabled = !notifSupported || notifPermission !== 'granted'
+              return (
+                <div
+                  key={reminder.id}
+                  className={`rounded-2xl border border-white/8 bg-white/3 p-4 transition ${
+                    disabled ? 'opacity-45' : ''
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {/* Toggle */}
+                    <button
+                      disabled={disabled}
+                      onClick={() => updateReminder(reminder.id, { enabled: !reminder.enabled })}
+                      className={`mt-0.5 w-9 h-5 rounded-full relative transition-colors shrink-0 ${
+                        reminder.enabled ? 'bg-violet-500' : 'bg-white/12'
+                      } disabled:cursor-not-allowed`}
+                      aria-label="Toggle recordatorio"
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                          reminder.enabled ? 'translate-x-4' : ''
+                        }`}
+                      />
+                    </button>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-white/80">
+                          {meta.emoji} {meta.label}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-white/30 mb-3 leading-snug">{meta.description}</p>
+
+                      <div className="flex flex-wrap gap-2">
+                        {/* Time picker */}
+                        <div>
+                          <label className="text-[10px] uppercase tracking-widest text-white/25 block mb-1">
+                            Hora
+                          </label>
+                          <input
+                            type="time"
+                            disabled={disabled}
+                            value={toTimeStr(reminder.hour, reminder.minute)}
+                            onChange={(e) => {
+                              const { hour, minute } = fromTimeStr(e.target.value)
+                              updateReminder(reminder.id, { hour, minute })
+                            }}
+                            className="rounded-xl bg-white/5 border border-white/8 px-3 py-2 text-sm text-white/75 focus:outline-none disabled:cursor-not-allowed [color-scheme:dark]"
+                          />
+                        </div>
+
+                        {/* Day picker (weekly only) */}
+                        {isWeekly && (
+                          <div>
+                            <label className="text-[10px] uppercase tracking-widest text-white/25 block mb-1">
+                              Día
+                            </label>
+                            <select
+                              disabled={disabled}
+                              value={reminder.dayOfWeek}
+                              onChange={(e) => updateReminder(reminder.id, { dayOfWeek: Number(e.target.value) })}
+                              className="rounded-xl bg-white/5 border border-white/8 px-3 py-2 text-sm text-white/75 focus:outline-none disabled:cursor-not-allowed"
+                            >
+                              {DAY_NAMES.map((name, i) => (
+                                <option key={i} value={i}>{name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </section>
 
