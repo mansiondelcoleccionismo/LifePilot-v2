@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import { Sparkles, CheckSquare, TrendingUp, Flame, Calendar } from 'lucide-react'
 import { useTasks } from '@/hooks/useTasks'
 import { useToday } from '@/hooks/useToday'
@@ -8,6 +9,8 @@ import { subscribeCalendarEvents } from '@/services/calendar.service'
 import { subscribeDiaryEntries } from '@/services/diary.service'
 import { subscribeAssets, calculateTotal } from '@/services/wealth.service'
 import { MedicationWidget } from '@/components/MedicationWidget'
+import { useWeights } from '@/features/health/useWeights'
+import { WeeklyWeightDialog } from '@/features/health/WeeklyWeightDialog'
 import type { Asset } from '@/types/wealth'
 import type { FoodEntry } from '@/types/nutrition'
 import type { CalendarEvent } from '@/types/event'
@@ -40,6 +43,8 @@ const fmtEUR = (n: number) =>
 export function InicioPage() {
   const { tasks, completed, loading: tasksLoading } = useTasks()
   const { today, greeting } = useToday()
+  const navigate = useNavigate()
+  const { loadWeights, lastWeight, delta } = useWeights()
   const [nutritionEntries, setNutritionEntries] = useState<FoodEntry[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([])
@@ -98,6 +103,8 @@ export function InicioPage() {
     setLoading(false)
     return () => { unsubNutrition(); unsubEvents(); unsubDiary() }
   }, [currentMonthKey])
+
+  useEffect(() => { loadWeights() }, [loadWeights])
 
   useEffect(() => {
     return subscribeAssets(setAssets)
@@ -209,11 +216,36 @@ export function InicioPage() {
             <Label>Métricas</Label>
           </div>
           <div className="grid grid-cols-2 gap-2">
+            {/* Peso — dinámico y clicable */}
+            <button
+              onClick={() => navigate('salud/peso')}
+              className="bg-white/4 rounded-xl p-3 text-left hover:bg-white/7 transition"
+            >
+              <p className="text-[10px] text-white/30 mb-1">Peso</p>
+              {lastWeight ? (
+                <>
+                  <p className="text-sm font-semibold text-white/80">{lastWeight.weight} kg</p>
+                  {delta !== null ? (
+                    <p className={`text-[10px] font-medium mt-0.5 ${delta < 0 ? 'text-emerald-400' : delta > 0 ? 'text-rose-400' : 'text-white/40'}`}>
+                      {delta > 0 ? '+' : ''}{delta} kg
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-white/25 mt-0.5">Sin comparativa</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-white/30">—</p>
+                  <p className="text-[10px] text-white/20 mt-0.5">Sin datos</p>
+                </>
+              )}
+            </button>
+
+            {/* Resto de métricas (hardcodeadas hasta implementarlas) */}
             {[
-              { label: 'Peso',   value: '78.4 kg',  delta: '-0.3',  pos: true  },
-              { label: 'Sueño',  value: '7h 20m',   delta: '+20m',  pos: true  },
-              { label: 'Pasos',  value: '8,240',    delta: '-1.2k', pos: false },
-              { label: 'Streak', value: `${streak} días`, delta: '+1', pos: true },
+              { label: 'Sueño',  value: '7h 20m',        delta: '+20m', pos: true  },
+              { label: 'Pasos',  value: '8,240',          delta: '-1.2k', pos: false },
+              { label: 'Streak', value: `${streak} días`, delta: '+1',  pos: true  },
             ].map((s) => (
               <div key={s.label} className="bg-white/4 rounded-xl p-3">
                 <p className="text-[10px] text-white/30 mb-1">{s.label}</p>
@@ -269,6 +301,8 @@ export function InicioPage() {
         </Card>
 
       </motion.div>
+
+      <WeeklyWeightDialog />
     </div>
   )
 }
