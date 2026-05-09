@@ -1,9 +1,10 @@
 import { useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Search, Bell, Moon, Menu } from 'lucide-react'
+import { Search, Bell, Moon, Sun, Menu } from 'lucide-react'
 import { useUIStore } from '@/store/ui.store'
 import { ALL_NAV_ITEMS } from '@/lib/navigation'
 import { useTasks } from '@/hooks/useTasks'
+import { useTheme } from '@/hooks/useTheme'
 
 function getPageInfo(pathname: string) {
   const emojis: Record<string, string> = {
@@ -23,6 +24,7 @@ export function Topbar() {
   const { setMobileMenuOpen, sidebarCollapsed } = useUIStore()
   const { label, emoji } = getPageInfo(pathname)
   const { pending } = useTasks()
+  const { isDark, toggle } = useTheme()
 
   return (
     <header
@@ -58,8 +60,12 @@ export function Topbar() {
           <span>Buscar</span>
           <kbd className="bg-white/8 px-1.5 py-0.5 rounded text-[10px] font-mono">⌘K</kbd>
         </button>
-        <button className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white/70 hover:bg-white/6 transition-colors">
-          <Moon size={15} />
+        <button
+          onClick={toggle}
+          title={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white/70 hover:bg-white/6 transition-colors"
+        >
+          {isDark ? <Sun size={15} /> : <Moon size={15} />}
         </button>
         <button className="relative w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white/70 hover:bg-white/6 transition-colors">
           <Bell size={15} />
