@@ -94,12 +94,13 @@ async function callGeminiModel(
     },
   )
 
-  if (res.status === 429 || res.status === 401 || res.status === 403) {
+  if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { error?: { message?: string } }
     const detail = body?.error?.message ?? ''
-    throw new RateLimitError(`Gemini ${res.status}${detail ? `: ${detail}` : ''}`)
+    const msg = `Gemini ${res.status}${detail ? `: ${detail}` : ''}`
+    if (res.status === 429 || res.status === 401 || res.status === 403) throw new RateLimitError(msg)
+    throw new Error(msg)
   }
-  if (!res.ok) throw new Error(`Gemini ${res.status}`)
 
   const data = await res.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
   return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
