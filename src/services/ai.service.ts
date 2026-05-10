@@ -1,13 +1,21 @@
 import type { AIMessage } from '@/types/ai'
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
-const LEGACY_KEY       = 'lifepilot_gemini_key'
+const LEGACY_GEMINI_KEY = 'lifepilot_gemini_key'
 const GEMINI_KEY_SLOTS = [
   'lifepilot_gemini_key_1',
   'lifepilot_gemini_key_2',
   'lifepilot_gemini_key_3',
 ] as const
-const GROQ_KEY_SLOT = 'lifepilot_groq_key'
+
+const LEGACY_GROQ_KEY = 'lifepilot_groq_key'
+const GROQ_KEY_SLOTS = [
+  'lifepilot_groq_key_1',
+  'lifepilot_groq_key_2',
+  'lifepilot_groq_key_3',
+  'lifepilot_groq_key_4',
+] as const
+
 const COOLDOWNS_KEY = 'lifepilot_ai_cooldowns'
 const COOLDOWN_MS   = 60_000
 
@@ -17,7 +25,17 @@ function getGeminiKeys(): string[] {
     .map(k => localStorage.getItem(k)?.trim() ?? '')
     .filter(Boolean)
   if (numbered.length > 0) return numbered
-  const legacy = localStorage.getItem(LEGACY_KEY)?.trim() ?? ''
+  const legacy = localStorage.getItem(LEGACY_GEMINI_KEY)?.trim() ?? ''
+  return legacy ? [legacy] : []
+}
+
+function getGroqKeys(): string[] {
+  const numbered = GROQ_KEY_SLOTS
+    .map(k => localStorage.getItem(k)?.trim() ?? '')
+    .filter(Boolean)
+  if (numbered.length > 0) return numbered
+  // Backward compat: old single-slot key
+  const legacy = localStorage.getItem(LEGACY_GROQ_KEY)?.trim() ?? ''
   return legacy ? [legacy] : []
 }
 
@@ -28,11 +46,11 @@ export function getGeminiKey(): string {
 export function saveGeminiKey(value: string) {
   const v = value.trim()
   localStorage.setItem('lifepilot_gemini_key_1', v)
-  localStorage.setItem(LEGACY_KEY, v)
+  localStorage.setItem(LEGACY_GEMINI_KEY, v)
 }
 
 export function hasAnyAIKey(): boolean {
-  return getGeminiKeys().length > 0 || Boolean(localStorage.getItem(GROQ_KEY_SLOT)?.trim())
+  return getGeminiKeys().length > 0 || getGroqKeys().length > 0
 }
 
 // ── Cooldown management ───────────────────────────────────────────────────────
@@ -61,16 +79,24 @@ export function getActiveKeyInfo(): { provider: string; index: number } | null {
   for (let i = 0; i < geminiKeys.length; i++) {
     if (!isOnCooldown(`gemini_${i}`)) return { provider: 'Gemini', index: i + 1 }
   }
-  const groqKey = localStorage.getItem(GROQ_KEY_SLOT)?.trim() ?? ''
-  if (groqKey && !isOnCooldown('groq')) return { provider: 'Groq', index: 0 }
+  const groqKeys = getGroqKeys()
+  for (let i = 0; i < groqKeys.length; i++) {
+    if (!isOnCooldown(`groq_${i}`)) return { provider: 'Groq', index: i + 1 }
+  }
   return null
 }
 
 // ── API callers ───────────────────────────────────────────────────────────────
 class RateLimitError extends Error {}
 
-// Models in priority order. gemini-2.0-flash-lite has higher free-tier limits.
-const GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash-8b']
+// Tries models in order; exp variants often have free-tier quota when stable ones don't.
+const GEMINI_MODELS = [
+  'gemini-2.0-flash-exp',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash-8b',
+  'gemini-1.5-flash-latest',
+]
 
 async function callGeminiModel(
   key: string,
@@ -118,7 +144,6 @@ async function callGemini(
     } catch (err) {
       if (err instanceof RateLimitError) throw err
       lastErr = err
-      // Non-rate-limit error (e.g. model not available) → try next model
     }
   }
   throw lastErr
@@ -150,8 +175,8 @@ export async function callAI(
   prompt: string,
   imageData?: { data: string; mimeType: string },
 ): Promise<string> {
+  // Try all Gemini keys first (supports images)
   const geminiKeys = getGeminiKeys()
-
   for (let i = 0; i < geminiKeys.length; i++) {
     const keyId = `gemini_${i}`
     if (isOnCooldown(keyId)) continue
@@ -163,14 +188,17 @@ export async function callAI(
     }
   }
 
+  // Fall through to Groq (no image support)
   if (!imageData) {
-    const groqKey = localStorage.getItem(GROQ_KEY_SLOT)?.trim() ?? ''
-    if (groqKey && !isOnCooldown('groq')) {
+    const groqKeys = getGroqKeys()
+    for (let i = 0; i < groqKeys.length; i++) {
+      const keyId = `groq_${i}`
+      if (isOnCooldown(keyId)) continue
       try {
-        return await callGroq(groqKey, prompt)
+        return await callGroq(groqKeys[i], prompt)
       } catch (err) {
-        if (err instanceof RateLimitError) setCooldown('groq')
-        else throw err
+        if (err instanceof RateLimitError) { setCooldown(keyId); continue }
+        throw err
       }
     }
   }
@@ -179,8 +207,6 @@ export async function callAI(
 }
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
-// Returns null on success, or a descriptive error string.
-// Tries each model in order and reports the exact Google error on failure.
 export async function testGeminiKey(key: string): Promise<string | null> {
   const errors: string[] = []
   for (const model of GEMINI_MODELS) {
@@ -189,12 +215,11 @@ export async function testGeminiKey(key: string): Promise<string | null> {
       return result.length > 0 ? null : `${model}: respuesta vacía`
     } catch (err) {
       const raw = err instanceof Error ? err.message : 'error desconocido'
-      // raw format: "Gemini 429: <google message>" or "Gemini 403: ..."
       const detail = raw.replace(/^Gemini \d+:?\s*/, '').trim()
       if (raw.includes('401')) errors.push(`${model}: key inválida (401)`)
-      else if (raw.includes('403')) errors.push(`${model}: sin acceso (403)${detail ? ' — ' + detail : ''}`)
-      else if (raw.includes('429')) errors.push(`${model}: quota excedida (429)${detail ? ' — ' + detail : ''}`)
-      else errors.push(`${model}: ${detail || raw}`)
+      else if (raw.includes('403')) errors.push(`${model}: sin acceso (403)`)
+      else if (raw.includes('429')) errors.push(`${model}: quota=0`)
+      else errors.push(`${model}: ${detail.slice(0, 60) || raw}`)
     }
   }
   return errors.join(' · ')

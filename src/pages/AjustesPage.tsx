@@ -26,7 +26,10 @@ const AI_KEY_CONFIGS: AIKeyConfig[] = [
   { id: 'gemini_1', label: 'Gemini — Key 1', provider: 'Gemini', index: 1, storageKey: 'lifepilot_gemini_key_1', placeholder: 'AIza...', link: 'https://aistudio.google.com/apikey', isGemini: true },
   { id: 'gemini_2', label: 'Gemini — Key 2', provider: 'Gemini', index: 2, storageKey: 'lifepilot_gemini_key_2', placeholder: 'AIza...', link: 'https://aistudio.google.com/apikey', isGemini: true },
   { id: 'gemini_3', label: 'Gemini — Key 3', provider: 'Gemini', index: 3, storageKey: 'lifepilot_gemini_key_3', placeholder: 'AIza...', link: 'https://aistudio.google.com/apikey', isGemini: true },
-  { id: 'groq',     label: 'Groq — Llama 3.3', provider: 'Groq', index: 0, storageKey: 'lifepilot_groq_key',     placeholder: 'gsk_...', link: 'https://console.groq.com/keys',       isGemini: false },
+  { id: 'groq_1',   label: 'Groq — Key 1',   provider: 'Groq',   index: 1, storageKey: 'lifepilot_groq_key_1',   placeholder: 'gsk_...', link: 'https://console.groq.com/keys',       isGemini: false },
+  { id: 'groq_2',   label: 'Groq — Key 2',   provider: 'Groq',   index: 2, storageKey: 'lifepilot_groq_key_2',   placeholder: 'gsk_...', link: 'https://console.groq.com/keys',       isGemini: false },
+  { id: 'groq_3',   label: 'Groq — Key 3',   provider: 'Groq',   index: 3, storageKey: 'lifepilot_groq_key_3',   placeholder: 'gsk_...', link: 'https://console.groq.com/keys',       isGemini: false },
+  { id: 'groq_4',   label: 'Groq — Key 4',   provider: 'Groq',   index: 4, storageKey: 'lifepilot_groq_key_4',   placeholder: 'gsk_...', link: 'https://console.groq.com/keys',       isGemini: false },
 ]
 
 type GoalType = 'perder' | 'mantener' | 'ganar'
@@ -103,6 +106,12 @@ export function AjustesPage() {
       }
     }
 
+    // Migrate legacy single Groq key → slot 1
+    const legacyGroq = localStorage.getItem('lifepilot_groq_key')?.trim()
+    if (legacyGroq && !localStorage.getItem('lifepilot_groq_key_1')?.trim()) {
+      localStorage.setItem('lifepilot_groq_key_1', legacyGroq)
+    }
+
     // Load AI keys
     const keys: Record<string, string> = {}
     AI_KEY_CONFIGS.forEach(cfg => { keys[cfg.id] = localStorage.getItem(cfg.storageKey)?.trim() ?? '' })
@@ -133,7 +142,9 @@ export function AjustesPage() {
   const saveAiKey = (id: string, storageKey: string) => {
     const value = (aiKeyValues[id] ?? '').trim()
     localStorage.setItem(storageKey, value)
+    // Keep legacy single-slot keys in sync for backward compat
     if (storageKey === 'lifepilot_gemini_key_1') localStorage.setItem('lifepilot_gemini_key', value)
+    if (storageKey === 'lifepilot_groq_key_1')   localStorage.setItem('lifepilot_groq_key', value)
     setActiveKeyInfo(getActiveKeyInfo())
     setFeedback('API key guardada')
     setTimeout(() => setFeedback(''), 2400)
@@ -321,7 +332,7 @@ export function AjustesPage() {
           </div>
 
           <p className="text-xs text-white/35 mb-5 leading-relaxed">
-            Configura hasta 3 claves de Gemini y 1 de Groq. Si una tiene rate limit la app pasa a la siguiente automáticamente (cooldown de 60s).
+            Configura hasta 3 claves de Gemini y 4 de Groq. La app rota automáticamente entre ellas cuando una tiene rate limit (cooldown de 60s).
           </p>
 
           <div className="space-y-3">
@@ -567,7 +578,7 @@ export function AjustesPage() {
                               const { hour, minute } = fromTimeStr(e.target.value)
                               updateReminder(reminder.id, { hour, minute })
                             }}
-                            className="rounded-xl bg-white/5 border border-white/8 px-3 py-2 text-sm text-white/75 focus:outline-none disabled:cursor-not-allowed [color-scheme:dark]"
+                            className="rounded-xl bg-white/5 border border-white/8 px-3 py-2 text-sm text-white/75 focus:outline-none disabled:cursor-not-allowed scheme-dark"
                           />
                         </div>
 
