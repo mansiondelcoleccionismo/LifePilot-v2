@@ -80,7 +80,8 @@ const defaultMacros: CustomMacros = { ...DAY_TARGETS }
 export function AjustesPage() {
   const [profile, setProfile] = useState<ProfileData>(defaultProfile)
   const [aiKeyValues, setAiKeyValues] = useState<Record<string, string>>({})
-  const [testStates, setTestStates] = useState<Record<string, 'idle' | 'testing' | 'ok' | 'fail'>>({})
+  const [testStates, setTestStates] = useState<Record<string, 'idle' | 'testing' | 'ok' | string>>({})
+  const [testErrors, setTestErrors] = useState<Record<string, string>>({})
   const [activeKeyInfo, setActiveKeyInfo] = useState<{ provider: string; index: number } | null>(null)
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>(() => loadNotificationSettings())
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
@@ -142,12 +143,15 @@ export function AjustesPage() {
     const value = (aiKeyValues[cfg.id] ?? '').trim()
     if (!value) return
     setTestStates(prev => ({ ...prev, [cfg.id]: 'testing' }))
-    let ok = false
-    try {
-      ok = cfg.isGemini ? await testGeminiKey(value) : await testGroqKey(value)
-    } catch { ok = false }
-    setTestStates(prev => ({ ...prev, [cfg.id]: ok ? 'ok' : 'fail' }))
-    setTimeout(() => setTestStates(prev => ({ ...prev, [cfg.id]: 'idle' })), 4000)
+    setTestErrors(prev => ({ ...prev, [cfg.id]: '' }))
+    const err = cfg.isGemini ? await testGeminiKey(value) : await testGroqKey(value)
+    if (err === null) {
+      setTestStates(prev => ({ ...prev, [cfg.id]: 'ok' }))
+    } else {
+      setTestStates(prev => ({ ...prev, [cfg.id]: 'fail' }))
+      setTestErrors(prev => ({ ...prev, [cfg.id]: err }))
+    }
+    setTimeout(() => setTestStates(prev => ({ ...prev, [cfg.id]: 'idle' })), 6000)
   }
 
   const updateReminder = (id: string, patch: Partial<Reminder>) => {
@@ -368,6 +372,12 @@ export function AjustesPage() {
                        ts === 'fail' ? '❌' : 'Probar'}
                     </button>
                   </div>
+                  {ts === 'ok' && (
+                    <p className="text-[11px] text-emerald-400 mt-1.5">Conexión correcta</p>
+                  )}
+                  {ts === 'fail' && testErrors[cfg.id] && (
+                    <p className="text-[11px] text-rose-400 mt-1.5 leading-snug">{testErrors[cfg.id]}</p>
+                  )}
                 </div>
               )
             })}

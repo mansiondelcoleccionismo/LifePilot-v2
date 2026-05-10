@@ -69,8 +69,12 @@ export function getActiveKeyInfo(): { provider: string; index: number } | null {
 // ── API callers ───────────────────────────────────────────────────────────────
 class RateLimitError extends Error {}
 
-async function callGemini(
+// Try newer model first, fall back to the widely-available 1.5-flash
+const GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash']
+
+async function callGeminiModel(
   key: string,
+  model: string,
   prompt: string,
   imageData?: { data: string; mimeType: string },
 ): Promise<string> {
@@ -79,7 +83,7 @@ async function callGemini(
   parts.push({ text: prompt })
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -91,12 +95,32 @@ async function callGemini(
   )
 
   if (res.status === 429 || res.status === 401 || res.status === 403) {
-    throw new RateLimitError(`Gemini ${res.status}`)
+    const body = await res.json().catch(() => ({})) as { error?: { message?: string } }
+    const detail = body?.error?.message ?? ''
+    throw new RateLimitError(`Gemini ${res.status}${detail ? `: ${detail}` : ''}`)
   }
-  if (!res.ok) throw new Error(`Gemini API error: ${res.status}`)
+  if (!res.ok) throw new Error(`Gemini ${res.status}`)
 
-  const data = await res.json()
+  const data = await res.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
   return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+}
+
+async function callGemini(
+  key: string,
+  prompt: string,
+  imageData?: { data: string; mimeType: string },
+): Promise<string> {
+  let lastErr: unknown
+  for (const model of GEMINI_MODELS) {
+    try {
+      return await callGeminiModel(key, model, prompt, imageData)
+    } catch (err) {
+      if (err instanceof RateLimitError) throw err
+      lastErr = err
+      // Non-rate-limit error (e.g. model not available) → try next model
+    }
+  }
+  throw lastErr
 }
 
 async function callGroq(key: string, prompt: string): Promise<string> {
@@ -154,21 +178,35 @@ export async function callAI(
 }
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
-export async function testGeminiKey(key: string): Promise<boolean> {
+// Returns null on success, or an error string describing the problem.
+export async function testGeminiKey(key: string): Promise<string | null> {
   try {
     const result = await callGemini(key, 'Di "ok" en una palabra.')
-    return result.length > 0
-  } catch {
-    return false
+    return result.length > 0 ? null : 'Respuesta vacía'
+  } catch (err) {
+    if (err instanceof RateLimitError) {
+      const msg = err.message
+      if (msg.includes('401')) return 'Key inválida (401)'
+      if (msg.includes('403')) return 'Sin acceso — activa la Generative Language API en Google Cloud (403)'
+      if (msg.includes('429')) return 'Límite de peticiones alcanzado (429)'
+      return msg
+    }
+    return err instanceof Error ? err.message : 'Error desconocido'
   }
 }
 
-export async function testGroqKey(key: string): Promise<boolean> {
+export async function testGroqKey(key: string): Promise<string | null> {
   try {
     const result = await callGroq(key, 'Di "ok" en una palabra.')
-    return result.length > 0
-  } catch {
-    return false
+    return result.length > 0 ? null : 'Respuesta vacía'
+  } catch (err) {
+    if (err instanceof RateLimitError) {
+      const msg = err.message
+      if (msg.includes('401')) return 'Key inválida (401)'
+      if (msg.includes('429')) return 'Límite de peticiones alcanzado (429)'
+      return msg
+    }
+    return err instanceof Error ? err.message : 'Error desconocido'
   }
 }
 
