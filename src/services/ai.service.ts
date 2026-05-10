@@ -178,21 +178,25 @@ export async function callAI(
 }
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
-// Returns null on success, or an error string describing the problem.
+// Returns null on success, or a descriptive error string.
+// Tries each model in order and reports the exact Google error on failure.
 export async function testGeminiKey(key: string): Promise<string | null> {
-  try {
-    const result = await callGemini(key, 'Di "ok" en una palabra.')
-    return result.length > 0 ? null : 'Respuesta vacía'
-  } catch (err) {
-    if (err instanceof RateLimitError) {
-      const msg = err.message
-      if (msg.includes('401')) return 'Key inválida (401)'
-      if (msg.includes('403')) return 'Sin acceso — activa la Generative Language API en Google Cloud (403)'
-      if (msg.includes('429')) return 'Límite de peticiones alcanzado (429)'
-      return msg
+  const errors: string[] = []
+  for (const model of GEMINI_MODELS) {
+    try {
+      const result = await callGeminiModel(key, model, 'Di "ok".', undefined)
+      return result.length > 0 ? null : `${model}: respuesta vacía`
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : 'error desconocido'
+      // raw format: "Gemini 429: <google message>" or "Gemini 403: ..."
+      const detail = raw.replace(/^Gemini \d+:?\s*/, '').trim()
+      if (raw.includes('401')) errors.push(`${model}: key inválida (401)`)
+      else if (raw.includes('403')) errors.push(`${model}: sin acceso (403)${detail ? ' — ' + detail : ''}`)
+      else if (raw.includes('429')) errors.push(`${model}: quota excedida (429)${detail ? ' — ' + detail : ''}`)
+      else errors.push(`${model}: ${detail || raw}`)
     }
-    return err instanceof Error ? err.message : 'Error desconocido'
   }
+  return errors.join(' · ')
 }
 
 export async function testGroqKey(key: string): Promise<string | null> {
