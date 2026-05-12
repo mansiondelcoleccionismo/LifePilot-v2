@@ -115,18 +115,62 @@ function AIFoodModal({ onClose }: { onClose: () => void }) {
     if (!input.trim()) return
     setStep('loading')
     try {
-      const prompt = `Eres un nutricionista experto. El usuario ha comido: ${input.trim()}. Estima los macronutrientes totales del plato completo. Responde SOLO con JSON válido sin texto adicional: {"descripcion":"nombre del plato","gramos_totales":0,"kcal":0,"protein":0,"carbs":0,"fat":0,"desglose":[{"nombre":"ingrediente","gramos":0,"kcal":0}]}`
-      const text = await callAI(prompt, undefined, false)
-      const match = text.match(/\{[\s\S]*\}/)
-      if (!match) throw new Error('NO_JSON')
-      const parsed = JSON.parse(match[0]) as AIFoodResult
+      const prompt = `Eres un nutricionista experto. El usuario ha comido: ${input.trim()}. Estima los macronutrientes totales del plato completo. Responde ÚNICAMENTE con el JSON, sin texto antes ni después, sin markdown, sin explicaciones: {"descripcion":"nombre del plato","gramos_totales":0,"kcal":0,"protein":0,"carbs":0,"fat":0,"desglose":[{"nombre":"ingrediente","gramos":0,"kcal":0}]}`
+
+      let responseText = ''
+
+      // Try Groq first (faster, more reliable for JSON)
+      const groqKey = localStorage.getItem('lifepilot_groq_key_1')?.trim() ?? ''
+      if (groqKey) {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.1,
+          }),
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({})) as { error?: { message?: string } }
+          const detail = body?.error?.message ?? `HTTP ${res.status}`
+          throw new Error(`Groq: ${detail}`)
+        }
+        const data = await res.json()
+        responseText = data?.choices?.[0]?.message?.content ?? ''
+      } else {
+        // Fall back to Gemini/Groq rotation
+        responseText = await callAI(prompt, undefined, true)
+      }
+
+      console.log('Respuesta IA raw:', responseText)
+
+      // Robust JSON extraction: strip markdown fences, isolate first { ... last }
+      let cleaned = responseText
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/g, '')
+        .trim()
+      const first = cleaned.indexOf('{')
+      const last  = cleaned.lastIndexOf('}')
+      if (first === -1 || last === -1) throw new Error(`JSON no encontrado en respuesta: ${cleaned.slice(0, 200)}`)
+      cleaned = cleaned.slice(first, last + 1)
+
+      let parsed: AIFoodResult
+      try {
+        parsed = JSON.parse(cleaned) as AIFoodResult
+      } catch (parseErr) {
+        console.error('JSON.parse error:', parseErr, '\nTexto limpio:', cleaned)
+        throw new Error(`Parse error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`)
+      }
+
       setResult(parsed)
       setStep('result')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      setError(msg.includes('Sin créditos')
-        ? 'Sin créditos de IA. Configura más API keys en Ajustes.'
-        : 'No he podido calcular los macros. Intenta ser más específico.')
+      console.error('AIFoodModal error:', msg)
+      setError(msg.includes('Sin créditos') || msg.includes('Groq') || msg.includes('Gemini') || msg.includes('HTTP')
+        ? msg
+        : `No he podido calcular los macros: ${msg}`)
       setStep('error')
     }
   }
