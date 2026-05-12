@@ -14,6 +14,7 @@ import {
   type FoodFavorite,
 } from '@/services/favorites.service'
 import type { UserProfile } from '@/types/profile'
+import { NUTRITION_REFERENCE } from '@/data/nutrition-reference'
 
 // ─── Meal config ─────────────────────────────────────────────────────────────
 const MEALS: Array<{ value: MealType; label: string; emoji: string; hours: [number, number] }> = [
@@ -99,13 +100,14 @@ interface AIFoodResult {
   protein: number
   carbs: number
   fat: number
-  desglose: Array<{ nombre: string; gramos: number; kcal: number }>
+  desglose: Array<{ nombre: string; gramos: number; kcal: number; protein?: number; carbs?: number; fat?: number }>
 }
 
 function AIFoodModal({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState<'input' | 'loading' | 'result' | 'error'>('input')
   const [input, setInput] = useState('')
   const [result, setResult] = useState<AIFoodResult | null>(null)
+  const [warnings, setWarnings] = useState<string[]>([])
   const [error, setError] = useState('')
   const [meal, setMeal] = useState<MealType>(getMealForTime())
   const [adding, setAdding] = useState(false)
@@ -115,11 +117,29 @@ function AIFoodModal({ onClose }: { onClose: () => void }) {
     if (!input.trim()) return
     setStep('loading')
     try {
-      const prompt = `Eres un nutricionista experto. El usuario ha comido: ${input.trim()}. Estima los macronutrientes totales del plato completo. Responde ÚNICAMENTE con el JSON, sin texto antes ni después, sin markdown, sin explicaciones: {"descripcion":"nombre del plato","gramos_totales":0,"kcal":0,"protein":0,"carbs":0,"fat":0,"desglose":[{"nombre":"ingrediente","gramos":0,"kcal":0}]}`
+      const refJson = JSON.stringify(NUTRITION_REFERENCE)
+      const prompt =
+`Eres un nutricionista experto con acceso a una base de datos nutricional verificada.
+El usuario ha comido: ${input.trim()}
+
+TABLA DE REFERENCIA REAL (macros por 100g, úsala siempre):
+${refJson}
+
+INSTRUCCIONES ESTRICTAS:
+1. Identifica cada ingrediente y estima los gramos de forma REALISTA para una ración normal española
+2. Usa SIEMPRE los valores de la tabla de referencia si el ingrediente aparece
+3. Para ingredientes no en la tabla, usa valores conservadores basados en alimentos similares
+4. Una ración normal de patatas fritas caseras para acompañar son 150-200g MÁXIMO
+5. Un filete normal son 120-150g
+6. Calcula multiplicando (gramos/100) × macros_por_100g
+7. Sé conservador — es mejor quedarse corto que exagerar
+
+Responde ÚNICAMENTE con JSON sin texto adicional:
+{"descripcion":"nombre del plato","gramos_totales":0,"kcal":0,"protein":0,"carbs":0,"fat":0,"desglose":[{"nombre":"ingrediente","gramos":0,"kcal":0,"protein":0,"carbs":0,"fat":0}]}`
 
       let responseText = ''
 
-      // Try Groq first (faster, more reliable for JSON)
+      // Try Groq first (faster, more reliable for structured JSON)
       const groqKey = localStorage.getItem('lifepilot_groq_key_1')?.trim() ?? ''
       if (groqKey) {
         const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -139,7 +159,6 @@ function AIFoodModal({ onClose }: { onClose: () => void }) {
         const data = await res.json()
         responseText = data?.choices?.[0]?.message?.content ?? ''
       } else {
-        // Fall back to Gemini/Groq rotation
         responseText = await callAI(prompt, undefined, true)
       }
 
@@ -152,7 +171,8 @@ function AIFoodModal({ onClose }: { onClose: () => void }) {
         .trim()
       const first = cleaned.indexOf('{')
       const last  = cleaned.lastIndexOf('}')
-      if (first === -1 || last === -1) throw new Error(`JSON no encontrado en respuesta: ${cleaned.slice(0, 200)}`)
+      if (first === -1 || last === -1)
+        throw new Error(`JSON no encontrado en respuesta: ${cleaned.slice(0, 200)}`)
       cleaned = cleaned.slice(first, last + 1)
 
       let parsed: AIFoodResult
@@ -163,6 +183,26 @@ function AIFoodModal({ onClose }: { onClose: () => void }) {
         throw new Error(`Parse error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`)
       }
 
+      // ── Validación y corrección de totales ───────────────────────────────────
+      const warnings: string[] = []
+
+      if (parsed.desglose?.length > 0) {
+        // Recalculate totals from breakdown if discrepancy > 20%
+        const sumKcal    = parsed.desglose.reduce((s, d) => s + (d.kcal    ?? 0), 0)
+        const sumProtein = parsed.desglose.reduce((s, d) => s + (d.protein ?? 0), 0)
+        const sumCarbs   = parsed.desglose.reduce((s, d) => s + (d.carbs   ?? 0), 0)
+        const sumFat     = parsed.desglose.reduce((s, d) => s + (d.fat     ?? 0), 0)
+
+        if (parsed.kcal > 0 && Math.abs(sumKcal - parsed.kcal) / parsed.kcal > 0.2) {
+          console.warn(`Discrepancia kcal: total=${parsed.kcal}, suma desglose=${sumKcal} → usando suma`)
+          parsed = { ...parsed, kcal: Math.round(sumKcal), protein: Math.round(sumProtein * 10) / 10, carbs: Math.round(sumCarbs * 10) / 10, fat: Math.round(sumFat * 10) / 10 }
+        }
+      }
+
+      if (parsed.kcal > 2000) warnings.push('⚠️ Calorías muy altas, revisa el desglose')
+      if (parsed.protein > 100) warnings.push('⚠️ Proteína muy alta, revisa el desglose')
+
+      setWarnings(warnings)
       setResult(parsed)
       setStep('result')
     } catch (err) {
@@ -252,6 +292,14 @@ function AIFoodModal({ onClose }: { onClose: () => void }) {
                   <p className="text-[11px] text-white/35 mt-0.5">{result.gramos_totales}g total estimado</p>
                 )}
               </div>
+
+              {warnings.length > 0 && (
+                <div className="space-y-1.5">
+                  {warnings.map((w, i) => (
+                    <div key={i} className="rounded-xl bg-amber-500/8 border border-amber-500/20 px-3 py-2 text-xs text-amber-300/85">{w}</div>
+                  ))}
+                </div>
+              )}
 
               <div className="grid grid-cols-4 gap-2">
                 {[
