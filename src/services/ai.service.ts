@@ -89,13 +89,10 @@ export function getActiveKeyInfo(): { provider: string; index: number } | null {
 // ── API callers ───────────────────────────────────────────────────────────────
 class RateLimitError extends Error {}
 
-// Tries models in order; exp variants often have free-tier quota when stable ones don't.
 const GEMINI_MODELS = [
-  'gemini-2.0-flash-exp',
+  'gemini-2.5-flash-preview-05-20',
+  'gemini-2.5-pro-exp-03-25',
   'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-flash-8b',
-  'gemini-1.5-flash-latest',
 ]
 
 async function callGeminiModel(

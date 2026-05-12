@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { collection, doc, getDoc, getDocs, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { getGeminiKey } from '@/services/ai.service'
+import { callAI, hasAnyAIKey } from '@/services/ai.service'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ExerciseDef {
@@ -432,21 +432,10 @@ async function persistHistory(entry: HistoryEntry) {
   } catch { /* silencioso */ }
 }
 
-// ─── Gemini ───────────────────────────────────────────────────────────────────
+// ─── AI coach ─────────────────────────────────────────────────────────────────
 async function callGemini(prompt: string): Promise<string> {
-  const key = getGeminiKey()
-  if (!key) throw new Error('Sin clave Gemini. Configúrala en Ajustes.')
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.7 } }),
-    },
-  )
-  if (!res.ok) throw new Error(`Gemini ${res.status}`)
-  const data = await res.json()
-  return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  if (!hasAnyAIKey()) throw new Error('Sin clave de IA. Configúrala en Ajustes.')
+  return callAI(prompt)
 }
 
 // ─── Progression detection ────────────────────────────────────────────────────
