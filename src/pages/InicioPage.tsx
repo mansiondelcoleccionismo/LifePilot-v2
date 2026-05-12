@@ -12,13 +12,82 @@ import { MedicationWidget } from '@/components/MedicationWidget'
 import { WeeklyReport } from '@/components/WeeklyReport'
 import { useWeights } from '@/features/health/useWeights'
 import { WeeklyWeightDialog } from '@/features/health/WeeklyWeightDialog'
-import { loadProfile, getTargetForDay, getDayLabel, calcIMC } from '@/services/metabolic.service'
+import { loadProfile, getTargetForDay, getDayLabel, getDayKind, calcIMC } from '@/services/metabolic.service'
 import { callAI, hasAnyAIKey } from '@/services/ai.service'
 import type { Asset } from '@/types/wealth'
-import type { FoodEntry } from '@/types/nutrition'
+import type { FoodEntry, MacroTarget } from '@/types/nutrition'
 import type { CalendarEvent } from '@/types/event'
 import type { DiaryEntry } from '@/types/diary'
 import type { UserProfile } from '@/types/profile'
+
+interface BriefingData {
+  saludo: string
+  tipo_dia: string
+  foco_dia: string
+  macros_tip: string
+  entreno_tip: string
+  estado_animo: string
+  prioridad: string
+}
+
+function getDayTheme(tipoDia: string) {
+  const t = tipoDia.toLowerCase()
+  if (t.includes('pesas') || t.includes('entreno') || t.includes('gym') || t.includes('training')) {
+    return {
+      badge:  'bg-blue-500/15 text-blue-300 border-blue-500/25',
+      border: 'border-blue-900/30',
+      bg:     'from-blue-950/40',
+      pill:   'border-blue-500/15',
+    }
+  }
+  if (t.includes('pádel') || t.includes('padel') || t.includes('tenis')) {
+    return {
+      badge:  'bg-emerald-500/15 text-emerald-300 border-emerald-500/25',
+      border: 'border-emerald-900/30',
+      bg:     'from-emerald-950/40',
+      pill:   'border-emerald-500/10',
+    }
+  }
+  return {
+    badge:  'bg-violet-500/15 text-violet-300 border-violet-500/25',
+    border: 'border-violet-900/30',
+    bg:     'from-violet-950/40',
+    pill:   'border-violet-500/10',
+  }
+}
+
+function buildStaticBriefing(profile: UserProfile | null, target: MacroTarget | null): BriefingData {
+  const protein = target?.protein ?? 160
+  const kind = profile ? getDayKind(profile) : 'rest'
+  const tipos: Record<string, string> = {
+    training:       'Día de pesas 🏋️',
+    padel:          'Día de pádel 🎾',
+    padel_training: 'Pesas + Pádel 💪',
+    rest:           'Día de descanso 😴',
+  }
+  const isActive = kind !== 'rest'
+  return {
+    saludo:       isActive ? 'Hoy toca sudar, a por ello' : 'Descansa y recarga bien',
+    tipo_dia:     tipos[kind],
+    foco_dia:     kind === 'training' ? 'Ejecutar el entreno con calidad máxima' : kind === 'padel' ? 'Disfrutar y competir en la pista' : kind === 'padel_training' ? 'Pesas por la mañana, pádel por la tarde' : 'Recuperación y nutrición correcta',
+    macros_tip:   `Alcanza los ${protein}g de proteína hoy`,
+    entreno_tip:  kind.includes('training') ? 'Progresión de cargas, técnica primero' : kind === 'padel' ? 'Calentar 10 min antes de empezar' : 'Movilidad suave o descanso activo',
+    estado_animo: 'La constancia es la clave del progreso',
+    prioridad:    kind.includes('training') ? 'Completar el entrenamiento planificado' : 'Alcanzar el objetivo de proteína',
+  }
+}
+
+function BriefingSkeleton() {
+  return (
+    <div className="animate-pulse space-y-3 mt-3">
+      <div className="h-px bg-white/6" />
+      <div className="grid grid-cols-2 gap-2">
+        {[...Array(4)].map((_, i) => <div key={i} className="h-14 bg-white/5 rounded-xl" />)}
+      </div>
+      <div className="h-10 bg-white/5 rounded-xl" />
+    </div>
+  )
+}
 
 const stagger = {
   hidden: {},
@@ -55,7 +124,7 @@ export function InicioPage() {
   const [assets, setAssets] = useState<Asset[]>([])
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [briefing, setBriefing] = useState('')
+  const [briefingData, setBriefingData] = useState<BriefingData | null>(null)
   const [briefingLoading, setBriefingLoading] = useState(false)
   const [showWeeklyReport, setShowWeeklyReport] = useState(false)
 
@@ -123,8 +192,18 @@ export function InicioPage() {
     if (!hasAnyAIKey()) return
     setBriefingLoading(true)
     try {
-      const result = await callAI('Genera el briefing diario.')
-      setBriefing(result)
+      const kcalHoy  = Math.round(todayNutrition.calories)
+      const protHoy  = Math.round(todayNutrition.protein)
+      const tareas   = pendingTasks.length
+
+      const prompt = `Eres el asistente personal de Daniel (35 años, recomposición corporal, entrena pesas y juega pádel).
+Datos reales de hoy: ${kcalHoy} kcal consumidas, ${protHoy}g proteína, ${tareas} tareas pendientes.
+Responde SOLO con este JSON sin texto adicional ni markdown:
+{"saludo":"frase motivadora máximo 8 palabras","tipo_dia":"Día de pesas|Día de pádel|Día de descanso","foco_dia":"una cosa en la que enfocarse máximo 10 palabras","macros_tip":"consejo nutrición concreto para hoy máximo 15 palabras","entreno_tip":"consejo entrenamiento concreto máximo 15 palabras","estado_animo":"observación empática basada en datos máximo 12 palabras","prioridad":"acción más importante del día máximo 10 palabras"}`
+
+      const raw = await callAI(prompt)
+      const match = raw.match(/\{[\s\S]*\}/)
+      if (match) setBriefingData(JSON.parse(match[0]) as BriefingData)
     } catch { /* silent */ }
     finally { setBriefingLoading(false) }
   }
@@ -158,43 +237,66 @@ export function InicioPage() {
       <motion.div variants={stagger} initial="hidden" animate="visible" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 
         {/* Briefing IA */}
-        <Card className="lg:col-span-3 bg-linear-to-br from-blue-950/60 to-[#1E1E28] border-blue-900/30 flex gap-4">
-          <div className="w-9 h-9 rounded-xl bg-blue-500/15 flex items-center justify-center shrink-0 mt-0.5">
-            <Sparkles size={18} className="text-blue-400" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2">
-              <Label>
-                Briefing IA · {profile ? getDayLabel(profile) : 'Hoy'}
-              </Label>
-              <button
-                onClick={fetchBriefing}
-                disabled={briefingLoading || !hasAnyAIKey()}
-                className="ml-auto shrink-0 w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition disabled:opacity-30"
-              >
-                {briefingLoading
-                  ? <Loader2 size={12} className="animate-spin text-white/50" />
-                  : <RefreshCw size={12} className="text-white/50" />}
-              </button>
-            </div>
-            {briefing ? (
-              <p className="text-sm text-white/70 leading-relaxed">{briefing}</p>
-            ) : (
-              <p className="text-sm text-white/50 leading-relaxed">
-                {pendingTasks.length > 0
-                  ? <><span className="text-white/80 font-medium">{pendingTasks.length} tareas</span> pendientes</>
-                  : <>¡Tareas al día! 🎉</>}
-                {todayNutrition.calories > 0 && (
-                  <> · <span className="text-white/80 font-medium">{Math.round(todayNutrition.calories)}</span>/{kcalTarget} kcal</>
-                )}
-                {streak > 0 && <> · Streak <span className="text-emerald-400 font-semibold">{streak} 🔥</span></>}
-                {!briefingLoading && hasAnyAIKey() && (
-                  <span className="text-white/25"> — Pulsa ↻ para briefing IA</span>
-                )}
-              </p>
-            )}
-          </div>
-        </Card>
+        {(() => {
+          const data = briefingData ?? buildStaticBriefing(profile, todayTarget)
+          const theme = getDayTheme(data.tipo_dia)
+          return (
+            <Card className={`lg:col-span-3 bg-linear-to-br ${theme.bg} to-[#1E1E28] ${theme.border}`}>
+              {/* Top row: badge + saludo + refresh */}
+              <div className="flex items-start gap-3">
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border shrink-0 ${theme.badge}`}>
+                  <Sparkles size={10} />
+                  {data.tipo_dia}
+                </span>
+                <p className="text-sm italic text-white/50 flex-1 leading-snug pt-0.5">{data.saludo}</p>
+                <button
+                  onClick={fetchBriefing}
+                  disabled={briefingLoading || !hasAnyAIKey()}
+                  className="shrink-0 w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition disabled:opacity-30"
+                  title="Regenerar briefing IA"
+                >
+                  {briefingLoading
+                    ? <Loader2 size={12} className="animate-spin text-white/50" />
+                    : <RefreshCw size={12} className="text-white/50" />}
+                </button>
+              </div>
+
+              {briefingLoading ? (
+                <BriefingSkeleton />
+              ) : (
+                <>
+                  <div className="h-px bg-white/6 my-3" />
+
+                  {/* 2×2 info pills */}
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    {[
+                      { icon: '🎯', label: 'Foco',      text: data.foco_dia },
+                      { icon: '🥗', label: 'Nutrición', text: data.macros_tip },
+                      { icon: '💪', label: 'Entreno',   text: data.entreno_tip },
+                      { icon: '🧠', label: 'Ánimo',     text: data.estado_animo },
+                    ].map(pill => (
+                      <div key={pill.label} className={`rounded-xl bg-white/4 border ${theme.pill} px-3 py-2.5`}>
+                        <p className="text-[10px] uppercase tracking-widest text-white/25 mb-1">
+                          {pill.icon} {pill.label}
+                        </p>
+                        <p className="text-[13px] text-white/70 leading-snug">{pill.text}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Priority */}
+                  <div className="rounded-xl bg-blue-500/8 border border-blue-500/15 px-3 py-2.5 flex items-center gap-2.5">
+                    <span className="text-base shrink-0">⚡</span>
+                    <div className="min-w-0">
+                      <p className="text-[10px] uppercase tracking-widest text-blue-400/60 mb-0.5">Prioridad del día</p>
+                      <p className="text-[13px] font-medium text-white/80 leading-snug">{data.prioridad}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </Card>
+          )
+        })()}
 
         {/* Macros */}
         <Card>
