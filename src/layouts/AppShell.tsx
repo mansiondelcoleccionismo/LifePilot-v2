@@ -7,6 +7,7 @@ import { useIsDesktop } from '@/hooks/useMediaQuery'
 import { Sidebar, SidebarContent } from './Sidebar'
 import { Topbar } from './Topbar'
 import { MobileNav } from './MobileNav'
+import { WeeklyReport } from '@/components/WeeklyReport'
 
 export function AppShell() {
   const { sidebarCollapsed, mobileMenuOpen, setMobileMenuOpen } = useUIStore()
@@ -93,6 +94,9 @@ export function AppShell() {
 
       {/* Nav móvil */}
       <MobileNav />
+
+      {/* Informe semanal — se abre automáticamente los domingos */}
+      <WeeklyReport />
     </div>
   )
 }

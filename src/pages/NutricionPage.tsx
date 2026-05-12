@@ -5,6 +5,8 @@ import { addNutritionEntry, deleteNutritionEntry, subscribeNutritionEntries } fr
 import { searchFoods, type OpenFoodResult } from '@/services/openfoodfacts.service'
 import { callAI, hasAnyAIKey } from '@/services/ai.service'
 import { DAY_TARGETS, type DayType, type FoodEntry } from '@/types/nutrition'
+import { loadProfile, autoDetectDayType, getTargetForDayType, getDayLabel } from '@/services/metabolic.service'
+import type { UserProfile } from '@/types/profile'
 
 const DAY_TYPE_OPTIONS: Array<{ value: DayType; label: string; emoji: string }> = [
   { value: 'normal',   label: 'Normal',   emoji: '⚖️' },
@@ -407,6 +409,7 @@ function MacroBar({
 export function NutricionPage() {
   const [entries, setEntries] = useState<FoodEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
 
   const [dayType, setDayType] = useState<DayType>(() => {
     return (localStorage.getItem(getDayTypeKey()) as DayType) ?? 'normal'
@@ -432,6 +435,16 @@ export function NutricionPage() {
   })
 
   useEffect(() => {
+    const p = loadProfile()
+    setProfile(p)
+    // Auto-detect day type only if user hasn't overridden today
+    const savedDayType = localStorage.getItem(getDayTypeKey()) as DayType | null
+    if (!savedDayType) {
+      setDayType(autoDetectDayType(p))
+    }
+  }, [])
+
+  useEffect(() => {
     const unsub = subscribeNutritionEntries((data) => {
       setEntries(data)
       setLoading(false)
@@ -449,7 +462,10 @@ export function NutricionPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const target = DAY_TARGETS[dayType]
+  const target = useMemo(() => {
+    if (profile) return getTargetForDayType(profile, dayType)
+    return DAY_TARGETS[dayType]
+  }, [profile, dayType])
 
   const totals = useMemo(
     () =>
@@ -576,7 +592,9 @@ export function NutricionPage() {
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">Tipo de día</p>
-            <h2 className="text-lg font-semibold text-white/90 mt-1">Selecciona tu objetivo</h2>
+            <h2 className="text-lg font-semibold text-white/90 mt-1">
+              {profile ? getDayLabel(profile) : 'Selecciona tu objetivo'}
+            </h2>
           </div>
           <p className="text-sm text-white/40 hidden sm:block">
             {target.kcal} kcal · P {target.protein}g · C {target.carbs}g · G {target.fat}g

@@ -1,8 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { User, Key, Apple, Palette, Database, Save, Download, Loader2, Bell } from 'lucide-react'
+import { User, Key, Apple, Palette, Database, Save, Download, Loader2, Bell, Activity } from 'lucide-react'
 import { DAY_TARGETS, type DayType, type MacroTarget } from '@/types/nutrition'
 import { getActiveKeyInfo, testGeminiKey, testGroqKey, clearCooldowns } from '@/services/ai.service'
+import {
+  loadProfile,
+  saveProfile as persistMetabolicProfile,
+  calcBMR, calcTDEE, calcIMC, calcIdealWeight, calcAge,
+} from '@/services/metabolic.service'
+import type { UserProfile, ActivityLevel, Goal } from '@/types/profile'
 import {
   type NotificationSettings,
   type Reminder,
@@ -94,6 +100,7 @@ export function AjustesPage() {
   const [customMacros, setCustomMacros] = useState<CustomMacros>(defaultMacros)
   const [theme, setTheme] = useState<ThemeType>('oscuro')
   const [feedback, setFeedback] = useState('')
+  const [metabolicProfile, setMetabolicProfile] = useState<UserProfile>(() => loadProfile())
 
   useEffect(() => {
     // Load profile
@@ -137,6 +144,28 @@ export function AjustesPage() {
     localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(profile))
     setFeedback('Perfil guardado correctamente')
     setTimeout(() => setFeedback(''), 2400)
+  }
+
+  const saveMetabolicProfile = () => {
+    persistMetabolicProfile(metabolicProfile)
+    setFeedback('Perfil metabólico guardado')
+    setTimeout(() => setFeedback(''), 2400)
+  }
+
+  const bmr  = useMemo(() => calcBMR(metabolicProfile),         [metabolicProfile])
+  const tdee = useMemo(() => calcTDEE(metabolicProfile),        [metabolicProfile])
+  const imc  = useMemo(() => calcIMC(metabolicProfile),         [metabolicProfile])
+  const idealW = useMemo(() => calcIdealWeight(metabolicProfile), [metabolicProfile])
+  const age  = useMemo(() => calcAge(metabolicProfile.birthDate), [metabolicProfile])
+
+  function toggleDay(field: 'padelDays' | 'trainingDays', day: number) {
+    setMetabolicProfile(prev => {
+      const arr = prev[field]
+      return {
+        ...prev,
+        [field]: arr.includes(day) ? arr.filter(d => d !== day) : [...arr, day].sort(),
+      }
+    })
   }
 
   const saveAiKey = (id: string, storageKey: string) => {
@@ -255,68 +284,145 @@ export function AjustesPage() {
       </motion.div>
 
       <div className="space-y-6">
-        {/* Perfil */}
+        {/* Perfil metabólico */}
         <section className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5">
           <div className="mb-5 flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center">
-              <User size={20} className="text-blue-300" />
+              <Activity size={20} className="text-blue-300" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">Perfil</p>
-              <h2 className="text-lg font-semibold text-white/90 mt-1">Información personal</h2>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">Perfil metabólico</p>
+              <h2 className="text-lg font-semibold text-white/90 mt-1">Datos personales y actividad</h2>
             </div>
+          </div>
+
+          {/* Calculated stats */}
+          <div className="grid grid-cols-4 gap-2 mb-5">
+            {[
+              { label: 'Edad',    value: `${age} años`      },
+              { label: 'BMR',     value: `${bmr} kcal`      },
+              { label: 'TDEE',    value: `${tdee} kcal`     },
+              { label: 'IMC',     value: `${imc}`           },
+            ].map(s => (
+              <div key={s.label} className="rounded-2xl bg-white/4 border border-white/6 p-3 text-center">
+                <p className="text-[10px] text-white/30 mb-1">{s.label}</p>
+                <p className="text-sm font-semibold text-white/80">{s.value}</p>
+              </div>
+            ))}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Nombre</label>
               <input
-                value={profile.name}
-                onChange={(e) => setProfile(prev => ({ ...prev, name: e.target.value }))}
+                value={metabolicProfile.name}
+                onChange={(e) => setMetabolicProfile(prev => ({ ...prev, name: e.target.value }))}
                 className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
                 placeholder="Tu nombre"
               />
             </div>
             <div>
+              <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Fecha de nacimiento</label>
+              <input
+                type="date"
+                value={metabolicProfile.birthDate}
+                onChange={(e) => setMetabolicProfile(prev => ({ ...prev, birthDate: e.target.value }))}
+                className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none scheme-dark"
+              />
+            </div>
+            <div>
               <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Peso actual (kg)</label>
               <input
-                value={profile.weight}
-                onChange={(e) => setProfile(prev => ({ ...prev, weight: e.target.value }))}
-                inputMode="numeric"
+                value={metabolicProfile.weight}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value)
+                  if (!isNaN(v)) setMetabolicProfile(prev => ({ ...prev, weight: v }))
+                  else if (e.target.value === '') setMetabolicProfile(prev => ({ ...prev, weight: 0 }))
+                }}
+                inputMode="decimal"
                 className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
-                placeholder="75.5"
+                placeholder="75"
               />
             </div>
             <div>
               <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Altura (cm)</label>
               <input
-                value={profile.height}
-                onChange={(e) => setProfile(prev => ({ ...prev, height: e.target.value }))}
+                value={metabolicProfile.height}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value)
+                  if (!isNaN(v)) setMetabolicProfile(prev => ({ ...prev, height: v }))
+                }}
                 inputMode="numeric"
                 className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
-                placeholder="175"
+                placeholder="178"
               />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Nivel de actividad base</label>
+              <select
+                value={metabolicProfile.activityLevel}
+                onChange={(e) => setMetabolicProfile(prev => ({ ...prev, activityLevel: e.target.value as ActivityLevel }))}
+                className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
+              >
+                <option value="sedentary">Sedentario</option>
+                <option value="light">Ligera actividad</option>
+                <option value="moderate">Actividad moderada</option>
+                <option value="active">Muy activo</option>
+                <option value="very_active">Extremadamente activo</option>
+              </select>
             </div>
             <div>
               <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">Objetivo</label>
               <select
-                value={profile.goal}
-                onChange={(e) => setProfile(prev => ({ ...prev, goal: e.target.value as GoalType }))}
+                value={metabolicProfile.goal}
+                onChange={(e) => setMetabolicProfile(prev => ({ ...prev, goal: e.target.value as Goal }))}
                 className="mt-2 w-full rounded-2xl bg-white/5 border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none"
               >
-                <option value="perder">Perder peso</option>
-                <option value="mantener">Mantener peso</option>
-                <option value="ganar">Ganar masa muscular</option>
+                <option value="recomposicion">Recomposición corporal</option>
+                <option value="deficit">Pérdida de grasa</option>
+                <option value="volumen">Ganancia muscular</option>
+                <option value="mantenimiento">Mantenimiento</option>
               </select>
             </div>
           </div>
 
-          <button
-            onClick={saveProfile}
-            className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
-          >
-            <Save size={16} /> Guardar perfil
-          </button>
+          {/* Day pickers */}
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            {(['padelDays', 'trainingDays'] as const).map(field => (
+              <div key={field}>
+                <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">
+                  {field === 'padelDays' ? 'Días de pádel' : 'Días de entreno (pesas)'}
+                </label>
+                <div className="mt-2 flex gap-1.5 flex-wrap">
+                  {['D', 'L', 'M', 'X', 'J', 'V', 'S'].map((d, i) => (
+                    <button
+                      key={i}
+                      onClick={() => toggleDay(field, i)}
+                      className={`w-9 h-9 rounded-xl text-xs font-semibold transition ${
+                        metabolicProfile[field].includes(i)
+                          ? field === 'padelDays'
+                            ? 'bg-cyan-500/25 border border-cyan-500/40 text-cyan-300'
+                            : 'bg-emerald-500/25 border border-emerald-500/40 text-emerald-300'
+                          : 'bg-white/4 border border-white/8 text-white/40 hover:border-white/14'
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              onClick={saveMetabolicProfile}
+              className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
+            >
+              <Save size={16} /> Guardar perfil
+            </button>
+            <p className="text-xs text-white/30">Peso ideal ≈ {idealW} kg (IMC 22)</p>
+          </div>
         </section>
 
         {/* IA */}

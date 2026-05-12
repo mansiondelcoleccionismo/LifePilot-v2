@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, CheckSquare, TrendingUp, Flame, Calendar } from 'lucide-react'
+import { Sparkles, CheckSquare, TrendingUp, Flame, Calendar, RefreshCw, Loader2 } from 'lucide-react'
 import { useTasks } from '@/hooks/useTasks'
 import { useToday } from '@/hooks/useToday'
 import { subscribeNutritionEntries } from '@/services/nutrition.service'
@@ -9,12 +9,16 @@ import { subscribeCalendarEvents } from '@/services/calendar.service'
 import { subscribeDiaryEntries } from '@/services/diary.service'
 import { subscribeAssets, calculateTotal } from '@/services/wealth.service'
 import { MedicationWidget } from '@/components/MedicationWidget'
+import { WeeklyReport } from '@/components/WeeklyReport'
 import { useWeights } from '@/features/health/useWeights'
 import { WeeklyWeightDialog } from '@/features/health/WeeklyWeightDialog'
+import { loadProfile, getTargetForDay, getDayLabel, calcIMC } from '@/services/metabolic.service'
+import { callAI, hasAnyAIKey } from '@/services/ai.service'
 import type { Asset } from '@/types/wealth'
 import type { FoodEntry } from '@/types/nutrition'
 import type { CalendarEvent } from '@/types/event'
 import type { DiaryEntry } from '@/types/diary'
+import type { UserProfile } from '@/types/profile'
 
 const stagger = {
   hidden: {},
@@ -50,6 +54,10 @@ export function InicioPage() {
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([])
   const [assets, setAssets] = useState<Asset[]>([])
   const [loading, setLoading] = useState(true)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [briefing, setBriefing] = useState('')
+  const [briefingLoading, setBriefingLoading] = useState(false)
+  const [showWeeklyReport, setShowWeeklyReport] = useState(false)
 
   const todayStr = new Date().toISOString().split('T')[0]
   const currentMonthKey = new Date().toISOString().slice(0, 7)
@@ -96,13 +104,30 @@ export function InicioPage() {
 
   const totalWealth = useMemo(() => calculateTotal(assets), [assets])
 
+  const todayTarget = useMemo(() => profile ? getTargetForDay(profile) : null, [profile])
+  const kcalTarget  = todayTarget?.kcal ?? 2200
+  const imc         = profile ? calcIMC(profile) : null
+  const proteinTarget = todayTarget?.protein ?? 160
+  const proteinPct  = proteinTarget > 0 ? Math.min(100, Math.round((todayNutrition.protein / proteinTarget) * 100)) : 0
+
   useEffect(() => {
+    setProfile(loadProfile())
     const unsubNutrition = subscribeNutritionEntries(setNutritionEntries)
     const unsubEvents = subscribeCalendarEvents(currentMonthKey, setEvents)
     const unsubDiary = subscribeDiaryEntries(currentMonthKey, setDiaryEntries)
     setLoading(false)
     return () => { unsubNutrition(); unsubEvents(); unsubDiary() }
   }, [currentMonthKey])
+
+  async function fetchBriefing() {
+    if (!hasAnyAIKey()) return
+    setBriefingLoading(true)
+    try {
+      const result = await callAI('Genera el briefing diario.')
+      setBriefing(result)
+    } catch { /* silent */ }
+    finally { setBriefingLoading(false) }
+  }
 
   useEffect(() => { loadWeights() }, [loadWeights])
 
@@ -134,26 +159,40 @@ export function InicioPage() {
 
         {/* Briefing IA */}
         <Card className="lg:col-span-3 bg-linear-to-br from-blue-950/60 to-[#1E1E28] border-blue-900/30 flex gap-4">
-          <div className="w-9 h-9 rounded-xl bg-blue-500/15 flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-blue-500/15 flex items-center justify-center shrink-0 mt-0.5">
             <Sparkles size={18} className="text-blue-400" />
           </div>
-          <div>
-            <Label>Briefing IA · Hoy</Label>
-            <p className="text-sm text-white/55 leading-relaxed">
-              {pendingTasks.length > 0
-                ? <> Tienes <span className="text-white/85 font-medium">{pendingTasks.length} tareas pendientes</span></>
-                : <>¡Todas tus tareas están completadas! 🎉</>}
-              {todayNutrition.calories > 0 && (
-                <> y has consumido <span className="text-white/85 font-medium">{Math.round(todayNutrition.calories)} kcal</span></>
-              )}
-              {streak > 0 && <>. Streak: <span className="text-emerald-400 font-semibold">{streak} 🔥</span></>}
-              {todayEvents.length > 0 && (
-                <>. Tienes {todayEvents.length} evento{todayEvents.length !== 1 ? 's' : ''} hoy.</>
-              )}
-              {!pendingTasks.length && todayNutrition.calories > 0 && streak > 0
-                ? ' Hoy es un día excelente para mantener el momentum.'
-                : ' Hoy es un buen día para rendir.'}
-            </p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2">
+              <Label>
+                Briefing IA · {profile ? getDayLabel(profile) : 'Hoy'}
+              </Label>
+              <button
+                onClick={fetchBriefing}
+                disabled={briefingLoading || !hasAnyAIKey()}
+                className="ml-auto shrink-0 w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition disabled:opacity-30"
+              >
+                {briefingLoading
+                  ? <Loader2 size={12} className="animate-spin text-white/50" />
+                  : <RefreshCw size={12} className="text-white/50" />}
+              </button>
+            </div>
+            {briefing ? (
+              <p className="text-sm text-white/70 leading-relaxed">{briefing}</p>
+            ) : (
+              <p className="text-sm text-white/50 leading-relaxed">
+                {pendingTasks.length > 0
+                  ? <><span className="text-white/80 font-medium">{pendingTasks.length} tareas</span> pendientes</>
+                  : <>¡Tareas al día! 🎉</>}
+                {todayNutrition.calories > 0 && (
+                  <> · <span className="text-white/80 font-medium">{Math.round(todayNutrition.calories)}</span>/{kcalTarget} kcal</>
+                )}
+                {streak > 0 && <> · Streak <span className="text-emerald-400 font-semibold">{streak} 🔥</span></>}
+                {!briefingLoading && hasAnyAIKey() && (
+                  <span className="text-white/25"> — Pulsa ↻ para briefing IA</span>
+                )}
+              </p>
+            )}
           </div>
         </Card>
 
@@ -162,25 +201,26 @@ export function InicioPage() {
           <div className="flex items-center gap-2 mb-3">
             <Flame size={14} className="text-orange-400" />
             <Label>Macros · Hoy</Label>
-            <span className="ml-auto text-[11px] text-white/25">{Math.round(todayNutrition.calories)} / 2200 kcal</span>
+            <span className="ml-auto text-[11px] text-white/25">{Math.round(todayNutrition.calories)} / {kcalTarget} kcal</span>
           </div>
           <div className="h-1.5 rounded-full bg-white/6 overflow-hidden mb-4">
             <motion.div
               initial={{ width: 0 }}
-              animate={{ width: `${Math.min((todayNutrition.calories / 2200) * 100, 100)}%` }}
+              animate={{ width: `${Math.min((todayNutrition.calories / kcalTarget) * 100, 100)}%` }}
               transition={{ duration: 0.8, delay: 0.3 }}
               className="h-full rounded-full bg-linear-to-r from-orange-500 to-amber-400"
             />
           </div>
           <div className="grid grid-cols-3 gap-2">
             {[
-              { label: 'Proteína', value: `${Math.round(todayNutrition.protein)}g`, color: 'text-blue-400' },
-              { label: 'Carbos',   value: `${Math.round(todayNutrition.carbs)}g`,   color: 'text-amber-400' },
-              { label: 'Grasa',    value: `${Math.round(todayNutrition.fat)}g`,     color: 'text-rose-400' },
+              { label: 'Proteína', value: `${Math.round(todayNutrition.protein)}g`, sub: `/${proteinTarget}g`, color: 'text-blue-400', pct: proteinPct },
+              { label: 'Carbos',   value: `${Math.round(todayNutrition.carbs)}g`,   sub: `/${todayTarget?.carbs ?? 220}g`, color: 'text-amber-400', pct: null },
+              { label: 'Grasa',    value: `${Math.round(todayNutrition.fat)}g`,     sub: `/${todayTarget?.fat ?? 70}g`,   color: 'text-rose-400',  pct: null },
             ].map((m) => (
               <div key={m.label} className="bg-white/4 rounded-xl p-3 text-center">
                 <p className={`text-base font-semibold ${m.color}`}>{m.value}</p>
-                <p className="text-[10px] text-white/30 mt-0.5">{m.label}</p>
+                <p className="text-[10px] text-white/20 mt-0.5">{m.sub}</p>
+                <p className="text-[10px] text-white/30">{m.label}</p>
               </div>
             ))}
           </div>
@@ -214,9 +254,15 @@ export function InicioPage() {
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp size={14} className="text-violet-400" />
             <Label>Métricas</Label>
+            <button
+              onClick={() => setShowWeeklyReport(true)}
+              className="ml-auto text-[10px] text-violet-400/50 hover:text-violet-400 transition"
+            >
+              Informe semanal →
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {/* Peso — dinámico y clicable */}
+            {/* Peso */}
             <button
               onClick={() => navigate('salud/peso')}
               className="bg-white/4 rounded-xl p-3 text-left hover:bg-white/7 transition"
@@ -241,18 +287,38 @@ export function InicioPage() {
               )}
             </button>
 
-            {/* Resto de métricas (hardcodeadas hasta implementarlas) */}
-            {[
-              { label: 'Sueño',  value: '7h 20m',        delta: '+20m', pos: true  },
-              { label: 'Pasos',  value: '8,240',          delta: '-1.2k', pos: false },
-              { label: 'Streak', value: `${streak} días`, delta: '+1',  pos: true  },
-            ].map((s) => (
-              <div key={s.label} className="bg-white/4 rounded-xl p-3">
-                <p className="text-[10px] text-white/30 mb-1">{s.label}</p>
-                <p className="text-sm font-semibold text-white/80">{s.value}</p>
-                <p className={`text-[10px] font-medium mt-0.5 ${s.pos ? 'text-emerald-400' : 'text-rose-400'}`}>{s.delta}</p>
-              </div>
-            ))}
+            {/* IMC */}
+            <div className="bg-white/4 rounded-xl p-3">
+              <p className="text-[10px] text-white/30 mb-1">IMC</p>
+              {imc ? (
+                <>
+                  <p className="text-sm font-semibold text-white/80">{imc}</p>
+                  <p className={`text-[10px] font-medium mt-0.5 ${imc < 18.5 ? 'text-blue-400' : imc < 25 ? 'text-emerald-400' : imc < 30 ? 'text-amber-400' : 'text-rose-400'}`}>
+                    {imc < 18.5 ? 'Bajo peso' : imc < 25 ? 'Normal' : imc < 30 ? 'Sobrepeso' : 'Obesidad'}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm font-semibold text-white/30">—</p>
+              )}
+            </div>
+
+            {/* Proteína */}
+            <div className="bg-white/4 rounded-xl p-3">
+              <p className="text-[10px] text-white/30 mb-1">Proteína hoy</p>
+              <p className="text-sm font-semibold text-white/80">{Math.round(todayNutrition.protein)}g</p>
+              <p className={`text-[10px] font-medium mt-0.5 ${proteinPct >= 80 ? 'text-emerald-400' : proteinPct >= 50 ? 'text-amber-400' : 'text-rose-400'}`}>
+                {proteinPct}% del objetivo
+              </p>
+            </div>
+
+            {/* Streak */}
+            <div className="bg-white/4 rounded-xl p-3">
+              <p className="text-[10px] text-white/30 mb-1">Streak diario</p>
+              <p className="text-sm font-semibold text-white/80">{streak} días</p>
+              <p className="text-[10px] font-medium mt-0.5 text-emerald-400">
+                {streak > 0 ? '🔥 Racha activa' : 'Sin racha'}
+              </p>
+            </div>
           </div>
         </Card>
 
@@ -303,6 +369,10 @@ export function InicioPage() {
       </motion.div>
 
       <WeeklyWeightDialog />
+
+      {showWeeklyReport && (
+        <WeeklyReport forceOpen onClose={() => setShowWeeklyReport(false)} />
+      )}
     </div>
   )
 }

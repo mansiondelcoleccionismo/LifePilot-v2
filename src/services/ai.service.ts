@@ -1,4 +1,5 @@
 import type { AIMessage } from '@/types/ai'
+import { buildAIContext } from './ai-memory.service'
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 const LEGACY_GEMINI_KEY = 'lifepilot_gemini_key'
@@ -171,14 +172,17 @@ async function callGroq(key: string, prompt: string): Promise<string> {
 export async function callAI(
   prompt: string,
   imageData?: { data: string; mimeType: string },
+  skipContext = false,
 ): Promise<string> {
+  const context = skipContext ? '' : buildAIContext()
+  const fullPrompt = context ? context + prompt : prompt
   // Try all Gemini keys first (supports images)
   const geminiKeys = getGeminiKeys()
   for (let i = 0; i < geminiKeys.length; i++) {
     const keyId = `gemini_${i}`
     if (isOnCooldown(keyId)) continue
     try {
-      return await callGemini(geminiKeys[i], prompt, imageData)
+      return await callGemini(geminiKeys[i], fullPrompt, imageData)
     } catch (err) {
       if (err instanceof RateLimitError) { setCooldown(keyId); continue }
       throw err
@@ -192,7 +196,7 @@ export async function callAI(
       const keyId = `groq_${i}`
       if (isOnCooldown(keyId)) continue
       try {
-        return await callGroq(groqKeys[i], prompt)
+        return await callGroq(groqKeys[i], fullPrompt)
       } catch (err) {
         if (err instanceof RateLimitError) { setCooldown(keyId); continue }
         throw err
@@ -240,7 +244,7 @@ export async function testGroqKey(key: string): Promise<string | null> {
 // ── Backward-compatible exports ───────────────────────────────────────────────
 export async function generateBriefing(): Promise<string> {
   return callAI(
-    'Eres un asistente personal. Genera un briefing diario breve para el usuario con recomendaciones de productividad, salud y bienestar. Incluye un resumen positivo y una sugerencia de enfoque para el día.',
+    'Eres un asistente personal de salud y productividad. Con el contexto del usuario, genera un briefing diario breve: saludo personalizado, qué tipo de día es hoy (entreno/pádel/descanso), target calórico del día y una recomendación clave. Máximo 3 frases. En español.',
   )
 }
 
