@@ -91,9 +91,8 @@ export function getActiveKeyInfo(): { provider: string; index: number } | null {
 class RateLimitError extends Error {}
 
 const GEMINI_MODELS = [
-  'gemini-2.5-flash-preview-05-20',
-  'gemini-2.5-pro-exp-03-25',
-  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
 ]
 
 async function callGeminiModel(
@@ -113,7 +112,7 @@ async function callGeminiModel(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts }],
-        generationConfig: { temperature: 0.1 },
+        generationConfig: { temperature: 0.4, maxOutputTokens: 1000 },
       }),
     },
   )

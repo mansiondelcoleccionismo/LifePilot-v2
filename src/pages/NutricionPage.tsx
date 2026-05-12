@@ -91,6 +91,195 @@ async function analyzePhoto(file: File): Promise<PhotoResult> {
   catch { throw new Error('PARSE_ERROR') }
 }
 
+// ─── AIFoodModal ─────────────────────────────────────────────────────────────
+interface AIFoodResult {
+  descripcion: string
+  gramos_totales: number
+  kcal: number
+  protein: number
+  carbs: number
+  fat: number
+  desglose: Array<{ nombre: string; gramos: number; kcal: number }>
+}
+
+function AIFoodModal({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState<'input' | 'loading' | 'result' | 'error'>('input')
+  const [input, setInput] = useState('')
+  const [result, setResult] = useState<AIFoodResult | null>(null)
+  const [error, setError] = useState('')
+  const [meal, setMeal] = useState<MealType>(getMealForTime())
+  const [adding, setAdding] = useState(false)
+  const hasKey = hasAnyAIKey()
+
+  async function handleCalc() {
+    if (!input.trim()) return
+    setStep('loading')
+    try {
+      const prompt = `Eres un nutricionista experto. El usuario ha comido: ${input.trim()}. Estima los macronutrientes totales del plato completo. Responde SOLO con JSON válido sin texto adicional: {"descripcion":"nombre del plato","gramos_totales":0,"kcal":0,"protein":0,"carbs":0,"fat":0,"desglose":[{"nombre":"ingrediente","gramos":0,"kcal":0}]}`
+      const text = await callAI(prompt, undefined, false)
+      const match = text.match(/\{[\s\S]*\}/)
+      if (!match) throw new Error('NO_JSON')
+      const parsed = JSON.parse(match[0]) as AIFoodResult
+      setResult(parsed)
+      setStep('result')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(msg.includes('Sin créditos')
+        ? 'Sin créditos de IA. Configura más API keys en Ajustes.'
+        : 'No he podido calcular los macros. Intenta ser más específico.')
+      setStep('error')
+    }
+  }
+
+  async function handleAdd() {
+    if (!result) return
+    setAdding(true)
+    await addNutritionEntry(
+      result.descripcion,
+      Math.round(result.kcal),
+      Math.round(result.protein * 10) / 10,
+      Math.round(result.carbs * 10) / 10,
+      Math.round(result.fat * 10) / 10,
+      meal,
+    )
+    setAdding(false)
+    onClose()
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/65 backdrop-blur-sm"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+        transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+        className="w-full max-w-md rounded-3xl bg-[#13131b] border border-white/10 overflow-hidden max-h-[90vh] flex flex-col"
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/6 shrink-0">
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-white/25">Gemini / Groq</p>
+            <h3 className="text-base font-semibold text-white/90 mt-0.5">Calcular macros con IA</h3>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition">
+            <X size={15} className="text-white/60" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          {step === 'input' && (
+            <>
+              {!hasKey && (
+                <div className="rounded-xl bg-amber-500/8 border border-amber-500/15 p-3 text-sm text-amber-300/80">
+                  Configura tu API key en Ajustes para usar esta función.
+                </div>
+              )}
+              <p className="text-sm text-white/45">Describe lo que has comido en lenguaje natural:</p>
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ej: 1 filete de pollo a la plancha con patatas fritas y ensalada"
+                rows={3}
+                autoFocus
+                className="w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-violet-500/40 resize-none"
+                onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleCalc() }}
+              />
+              <button onClick={handleCalc} disabled={!hasKey || !input.trim()}
+                className="w-full rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white hover:bg-violet-500 transition disabled:opacity-35 flex items-center justify-center gap-2">
+                <Bot size={15} /> Calcular macros
+              </button>
+            </>
+          )}
+
+          {step === 'loading' && (
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <Loader2 size={30} className="text-violet-400 animate-spin" />
+              <p className="text-sm text-white/50">Calculando macros…</p>
+            </div>
+          )}
+
+          {step === 'result' && result && (
+            <>
+              <div className="rounded-xl bg-violet-500/8 border border-violet-500/15 p-3">
+                <p className="text-[10px] uppercase tracking-widest text-violet-400/60 mb-1">Plato detectado</p>
+                <p className="text-sm text-white/85 font-medium">{result.descripcion}</p>
+                {result.gramos_totales > 0 && (
+                  <p className="text-[11px] text-white/35 mt-0.5">{result.gramos_totales}g total estimado</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { l: 'Kcal',  v: String(Math.round(result.kcal)),            c: 'text-orange-400', bg: 'bg-orange-500/8 border-orange-500/15' },
+                  { l: 'Prot',  v: `${Math.round(result.protein)}g`,           c: 'text-blue-400',   bg: 'bg-blue-500/8 border-blue-500/15' },
+                  { l: 'Carbs', v: `${Math.round(result.carbs)}g`,             c: 'text-amber-400',  bg: 'bg-amber-500/8 border-amber-500/15' },
+                  { l: 'Grasa', v: `${Math.round(result.fat)}g`,               c: 'text-rose-400',   bg: 'bg-rose-500/8 border-rose-500/15' },
+                ].map(m => (
+                  <div key={m.l} className={`rounded-xl border p-2.5 text-center ${m.bg}`}>
+                    <p className={`text-sm font-bold ${m.c}`}>{m.v}</p>
+                    <p className="text-[10px] text-white/30 mt-0.5">{m.l}</p>
+                  </div>
+                ))}
+              </div>
+
+              {result.desglose.length > 0 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">Desglose</p>
+                  <div className="space-y-1.5">
+                    {result.desglose.map((ing, i) => (
+                      <div key={i} className="flex items-center justify-between px-3 py-2 rounded-xl bg-white/3 border border-white/5">
+                        <div>
+                          <p className="text-sm text-white/75">{ing.nombre}</p>
+                          <p className="text-[11px] text-white/35">{ing.gramos}g</p>
+                        </div>
+                        <span className="text-xs font-semibold text-orange-400">{Math.round(ing.kcal)} kcal</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">Añadir a</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {MEALS.map(m => (
+                    <button key={m.value} onClick={() => setMeal(m.value)}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-medium transition ${meal === m.value ? 'bg-blue-500/20 border border-blue-500/40 text-blue-300' : 'bg-white/4 border border-white/8 text-white/50 hover:border-white/14'}`}>
+                      {m.emoji} {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {step === 'error' && (
+            <div className="text-center py-8 space-y-4">
+              <div className="text-5xl">🤔</div>
+              <p className="text-sm text-white/60 leading-relaxed px-2">{error}</p>
+              <button onClick={() => { setStep('input'); setError('') }}
+                className="inline-flex items-center gap-2 rounded-xl bg-white/8 border border-white/10 px-4 py-2.5 text-sm text-white/55">
+                <RotateCcw size={14} /> Reintentar
+              </button>
+            </div>
+          )}
+        </div>
+
+        {step === 'result' && (
+          <div className="px-5 pb-5 pt-2 shrink-0 border-t border-white/5">
+            <button onClick={handleAdd} disabled={adding}
+              className="w-full rounded-2xl bg-emerald-600 py-3.5 text-sm font-semibold text-white hover:bg-emerald-500 transition disabled:opacity-40 flex items-center justify-center gap-2">
+              {adding && <Loader2 size={14} className="animate-spin" />}
+              {adding ? 'Añadiendo...' : 'Añadir al día'}
+            </button>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  )
+}
+
 // ─── PhotoModal ───────────────────────────────────────────────────────────────
 function PhotoModal({ onClose, onAddedMeal }: { onClose: () => void; onAddedMeal: MealType }) {
   const [step, setStep] = useState<'select' | 'preview' | 'analyzing' | 'result' | 'error'>('select')
@@ -540,6 +729,7 @@ export function NutricionPage() {
 
   const [confirmFood, setConfirmFood] = useState<ConfirmFood | null>(null)
   const [showPhotoModal, setShowPhotoModal] = useState(false)
+  const [showAIModal, setShowAIModal] = useState(false)
   const [expandedMeals, setExpandedMeals] = useState<Set<MealType>>(
     () => new Set<MealType>(['desayuno', 'almuerzo', 'cena'])
   )
@@ -688,25 +878,35 @@ export function NutricionPage() {
         </div>
       </motion.section>
 
-      {/* Search bar */}
+      {/* Search bar + AI button */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
-        className="relative mb-4">
-        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-        <input
-          ref={searchInputRef}
-          value={searchQuery}
-          onChange={(e) => handleSearchInput(e.target.value)}
-          placeholder="Buscar o añadir alimento..."
-          className="w-full pl-10 pr-10 py-3 rounded-2xl bg-[#1E1E28] border border-white/8 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-blue-500/40 transition-colors"
-        />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-          {searching && <Loader2 size={14} className="text-white/30 animate-spin" />}
-          {searchQuery && !searching && (
-            <button onClick={() => { setSearchQuery(''); setOffResults([]) }} className="text-white/25 hover:text-white/50 transition">
-              <X size={14} />
-            </button>
-          )}
+        className="flex gap-2 mb-4">
+        <div className="relative flex-1">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+          <input
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={(e) => handleSearchInput(e.target.value)}
+            placeholder="Buscar alimento..."
+            className="w-full pl-10 pr-10 py-3 rounded-2xl bg-[#1E1E28] border border-white/8 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-blue-500/40 transition-colors"
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {searching && <Loader2 size={14} className="text-white/30 animate-spin" />}
+            {searchQuery && !searching && (
+              <button onClick={() => { setSearchQuery(''); setOffResults([]) }} className="text-white/25 hover:text-white/50 transition">
+                <X size={14} />
+              </button>
+            )}
+          </div>
         </div>
+        <button
+          onClick={() => setShowAIModal(true)}
+          className="shrink-0 rounded-2xl bg-violet-600/15 border border-violet-500/25 px-3.5 flex items-center gap-1.5 text-violet-300 hover:bg-violet-600/25 hover:border-violet-500/40 transition"
+          title="Calcular macros con IA"
+        >
+          <Bot size={15} />
+          <span className="text-xs font-medium hidden sm:inline">IA</span>
+        </button>
       </motion.div>
 
       {/* Favorites or search results */}
@@ -888,6 +1088,9 @@ export function NutricionPage() {
         )}
         {showPhotoModal && (
           <PhotoModal onClose={() => setShowPhotoModal(false)} onAddedMeal={getMealForTime()} />
+        )}
+        {showAIModal && (
+          <AIFoodModal onClose={() => setShowAIModal(false)} />
         )}
       </AnimatePresence>
     </div>
