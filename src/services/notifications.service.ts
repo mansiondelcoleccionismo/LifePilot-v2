@@ -50,6 +50,20 @@ export const DEFAULT_REMINDERS: Reminder[] = [
     body: '👧 En 15 min llegas a casa — ¿qué plan tienes con Kira hoy?',
     hour: 17, minute: 15,
   },
+  {
+    id: 'padel_lunes',
+    enabled: true,
+    title: '🎾 ¡Reserva la pista de pádel!',
+    body: 'Recuerda reservar la pista para el lunes. ¡Que no se te adelanten!',
+    hour: 11, minute: 0, dayOfWeek: 0,
+  },
+  {
+    id: 'padel_miercoles',
+    enabled: true,
+    title: '🎾 ¡Reserva la pista de pádel!',
+    body: 'Recuerda reservar la pista para el miércoles. ¡Hazlo ahora!',
+    hour: 9, minute: 45, dayOfWeek: 2,
+  },
 ]
 
 // ── Timer registry ────────────────────────────────────────────────────────────

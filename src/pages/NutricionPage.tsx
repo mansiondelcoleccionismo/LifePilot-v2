@@ -18,18 +18,28 @@ import { NUTRITION_REFERENCE } from '@/data/nutrition-reference'
 
 // ─── Meal config ─────────────────────────────────────────────────────────────
 const MEALS: Array<{ value: MealType; label: string; emoji: string; hours: [number, number] }> = [
-  { value: 'desayuno',     label: 'Desayuno',      emoji: '🌅', hours: [6,  10] },
-  { value: 'media_manana', label: 'Media mañana',  emoji: '🍎', hours: [10, 12] },
-  { value: 'almuerzo',     label: 'Almuerzo',      emoji: '🍽️', hours: [12, 16] },
-  { value: 'merienda',     label: 'Merienda',      emoji: '☕', hours: [16, 19] },
-  { value: 'cena',         label: 'Cena',           emoji: '🌙', hours: [19, 23] },
-  { value: 'snack',        label: 'Snack',          emoji: '🍿', hours: [0,  6]  },
+  { value: 'desayuno', label: 'Desayuno', emoji: '🌅', hours: [6,  10] },
+  { value: 'almuerzo', label: 'Almuerzo', emoji: '🍎', hours: [10, 13] },
+  { value: 'comida',   label: 'Comida',   emoji: '🍽️', hours: [13, 16] },
+  { value: 'merienda', label: 'Merienda', emoji: '🫐', hours: [16, 19] },
+  { value: 'cena',     label: 'Cena',     emoji: '🌙', hours: [19, 23] },
 ]
+
+// Maps old meal values (from existing Firebase data) to new types
+const MEAL_REMAP: Record<string, MealType> = {
+  media_manana: 'almuerzo',
+  snack:        'cena',
+}
 
 function getMealForTime(date = new Date()): MealType {
   const h = date.getHours()
   const m = MEALS.find(ml => h >= ml.hours[0] && h < ml.hours[1])
-  return m?.value ?? 'snack'
+  return m?.value ?? 'cena'
+}
+
+function normalizeMeal(meal: string | undefined, date?: Date): MealType {
+  if (!meal) return getMealForTime(date)
+  return MEAL_REMAP[meal] ?? (meal as MealType)
 }
 
 function getMealLabel(meal: MealType) {
@@ -850,7 +860,7 @@ export function NutricionPage() {
   // ── Auto-expand meal with entries ────────────────────────────────────────
   useEffect(() => {
     if (!entries.length) return
-    const activeMeals = new Set(entries.map(e => e.meal ?? getMealForTime(e.createdAt)))
+    const activeMeals = new Set(entries.map(e => normalizeMeal(e.meal, e.createdAt)))
     setExpandedMeals(prev => new Set([...prev, ...activeMeals]))
   }, [entries.length])
 
@@ -907,7 +917,10 @@ export function NutricionPage() {
   // ── Grouped entries ───────────────────────────────────────────────────────
   const entriesByMeal = useMemo(() => {
     const groups = Object.fromEntries(MEALS.map(m => [m.value, [] as FoodEntry[]])) as Record<MealType, FoodEntry[]>
-    entries.forEach(e => { const meal = e.meal ?? getMealForTime(e.createdAt); groups[meal].push(e) })
+    entries.forEach(e => {
+      const meal = normalizeMeal(e.meal, e.createdAt)
+      groups[meal]?.push(e)
+    })
     return groups
   }, [entries])
 

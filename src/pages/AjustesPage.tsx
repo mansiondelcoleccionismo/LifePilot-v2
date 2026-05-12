@@ -65,7 +65,9 @@ const REMINDER_META: Record<string, { label: string; emoji: string; description:
   med_morning: { label: 'Medicación mañana',   emoji: '💊', description: 'Recordatorio de medicación matutina' },
   med_night:   { label: 'Medicación noche',    emoji: '💊', description: 'Recordatorio de medicación nocturna' },
   diary:       { label: 'Diario del día',       emoji: '📝', description: 'Recordatorio para registrar tu estado de ánimo' },
-  kira:        { label: 'Tiempo con Kira',     emoji: '👧', description: 'Aviso 15 min antes de llegar a casa' },
+  kira:             { label: 'Tiempo con Kira',           emoji: '👧', description: 'Aviso 15 min antes de llegar a casa' },
+  padel_lunes:      { label: 'Reserva pádel lunes',      emoji: '🎾', description: 'Dom 11:00 — reservar pista para el lunes' },
+  padel_miercoles:  { label: 'Reserva pádel miércoles',  emoji: '🎾', description: 'Mar 9:45 — reservar pista para el miércoles' },
 }
 
 function toTimeStr(h: number, m: number) {

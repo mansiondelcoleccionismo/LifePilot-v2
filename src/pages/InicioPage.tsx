@@ -14,6 +14,7 @@ import { useWeights } from '@/features/health/useWeights'
 import { WeeklyWeightDialog } from '@/features/health/WeeklyWeightDialog'
 import { loadProfile, getTargetForDay, getDayLabel, getDayKind, calcIMC } from '@/services/metabolic.service'
 import { callAI, hasAnyAIKey } from '@/services/ai.service'
+import { getWeatherToday, type WeatherData } from '@/services/weather.service'
 import type { Asset } from '@/types/wealth'
 import type { FoodEntry, MacroTarget } from '@/types/nutrition'
 import type { CalendarEvent } from '@/types/event'
@@ -127,6 +128,7 @@ export function InicioPage() {
   const [briefingData, setBriefingData] = useState<BriefingData | null>(null)
   const [briefingLoading, setBriefingLoading] = useState(false)
   const [showWeeklyReport, setShowWeeklyReport] = useState(false)
+  const [weather, setWeather] = useState<WeatherData | null>(null)
 
   const todayStr = new Date().toISOString().split('T')[0]
   const currentMonthKey = new Date().toISOString().slice(0, 7)
@@ -185,6 +187,7 @@ export function InicioPage() {
     const unsubEvents = subscribeCalendarEvents(currentMonthKey, setEvents)
     const unsubDiary = subscribeDiaryEntries(currentMonthKey, setDiaryEntries)
     setLoading(false)
+    getWeatherToday().then(setWeather)
     return () => { unsubNutrition(); unsubEvents(); unsubDiary() }
   }, [currentMonthKey])
 
@@ -196,8 +199,11 @@ export function InicioPage() {
       const protHoy  = Math.round(todayNutrition.protein)
       const tareas   = pendingTasks.length
 
+      const weatherStr = weather
+        ? `El tiempo hoy en Pedrola: ${weather.description}, ${weather.tempMax}°C máx / ${weather.tempMin}°C mín, probabilidad de lluvia ${weather.precipitationProb}%.`
+        : ''
       const prompt = `Eres el asistente personal de Daniel (35 años, recomposición corporal, entrena pesas y juega pádel).
-Datos reales de hoy: ${kcalHoy} kcal consumidas, ${protHoy}g proteína, ${tareas} tareas pendientes.
+Datos reales de hoy: ${kcalHoy} kcal consumidas, ${protHoy}g proteína, ${tareas} tareas pendientes.${weatherStr ? `\n${weatherStr}` : ''}
 Responde SOLO con este JSON sin texto adicional ni markdown:
 {"saludo":"frase motivadora máximo 8 palabras","tipo_dia":"Día de pesas|Día de pádel|Día de descanso","foco_dia":"una cosa en la que enfocarse máximo 10 palabras","macros_tip":"consejo nutrición concreto para hoy máximo 15 palabras","entreno_tip":"consejo entrenamiento concreto máximo 15 palabras","estado_animo":"observación empática basada en datos máximo 12 palabras","prioridad":"acción más importante del día máximo 10 palabras"}`
 
@@ -292,6 +298,34 @@ Responde SOLO con este JSON sin texto adicional ni markdown:
                       <p className="text-[13px] font-medium text-white/80 leading-snug">{data.prioridad}</p>
                     </div>
                   </div>
+
+                  {/* Weather pill */}
+                  {weather && (() => {
+                    const rain = weather.precipitationProb
+                    const heavy = rain > 70
+                    const mild  = rain > 40
+                    if (heavy) return (
+                      <div className="rounded-xl bg-rose-500/8 border border-rose-500/20 px-3 py-2 flex items-center gap-2">
+                        <span className="text-base">🌧️</span>
+                        <p className="text-[13px] text-rose-300/90">Llueve hoy — cambia el plan de pádel</p>
+                        <span className="ml-auto text-[11px] text-rose-400/60 shrink-0">{rain}%</span>
+                      </div>
+                    )
+                    if (mild) return (
+                      <div className="rounded-xl bg-amber-500/8 border border-amber-500/20 px-3 py-2 flex items-center gap-2">
+                        <span className="text-base">⚠️</span>
+                        <p className="text-[13px] text-amber-300/90">Posible lluvia hoy</p>
+                        <span className="ml-auto text-[11px] text-amber-400/60 shrink-0">{rain}%</span>
+                      </div>
+                    )
+                    return (
+                      <div className="rounded-xl bg-emerald-500/8 border border-emerald-500/15 px-3 py-2 flex items-center gap-2">
+                        <span className="text-base">{weather.emoji}</span>
+                        <p className="text-[13px] text-emerald-300/80">Buen día para el pádel — {weather.description}</p>
+                        <span className="ml-auto text-[11px] text-emerald-400/50 shrink-0">{weather.tempMax}°C</span>
+                      </div>
+                    )
+                  })()}
                 </>
               )}
             </Card>
@@ -428,6 +462,41 @@ Responde SOLO con este JSON sin texto adicional ni markdown:
         <Card>
           <MedicationWidget />
         </Card>
+
+        {/* Tiempo */}
+        {weather && (
+          <Card>
+            <Label>Tiempo · Pedrola</Label>
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-4xl leading-none">{weather.emoji}</span>
+              <div>
+                <p className="text-2xl font-bold text-white/90 leading-none">
+                  {weather.tempMax}°<span className="text-base font-normal text-white/40">/{weather.tempMin}°</span>
+                </p>
+                <p className="text-sm text-white/50 mt-0.5">{weather.description}</p>
+              </div>
+            </div>
+            {/* Rain probability bar */}
+            <div className="mb-2">
+              <div className="flex justify-between text-[11px] text-white/30 mb-1">
+                <span>Prob. lluvia</span>
+                <span>{weather.precipitationProb}%</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-white/6 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    weather.precipitationProb > 70 ? 'bg-rose-500' :
+                    weather.precipitationProb > 40 ? 'bg-amber-500' : 'bg-blue-400'
+                  }`}
+                  style={{ width: `${weather.precipitationProb}%` }}
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-white/20 mt-2">
+              Pedrola · Actualizado hace {Math.round((Date.now() - weather.fetchedAt) / 60000)} min
+            </p>
+          </Card>
+        )}
 
         {/* Patrimonio */}
         <Card className="bg-linear-to-br from-amber-950/40 to-[#1E1E28] border-amber-900/25">

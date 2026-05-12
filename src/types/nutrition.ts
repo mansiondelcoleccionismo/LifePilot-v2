@@ -1,5 +1,5 @@
 export type DayType = 'normal' | 'volumen' | 'deficit' | 'descanso'
-export type MealType = 'desayuno' | 'media_manana' | 'almuerzo' | 'merienda' | 'cena' | 'snack'
+export type MealType = 'desayuno' | 'almuerzo' | 'comida' | 'merienda' | 'cena'
 
 export interface MacroTarget {
   kcal: number
