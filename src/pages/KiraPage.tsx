@@ -833,19 +833,28 @@ export function KiraPage() {
                     placeholder="Una cosa que dijo Kira hoy..." />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  {[['Kira', diaryKiraMood, setDiaryKiraMood], ['Daniel', diaryDanielMood, setDiaryDanielMood]].map(([name, mood, setMood]) => (
-                    <div key={name as string}>
-                      <p className="text-[10px] uppercase tracking-widest text-white/35 mb-2">Estado de {name}</p>
-                      <div className="flex gap-1">
-                        {([1,2,3,4,5] as const).map(v => (
-                          <button key={v} onClick={() => (setMood as (n: 1|2|3|4|5) => void)(v)}
-                            className={`flex-1 rounded-xl py-1.5 text-sm border transition ${(mood as number) === v ? 'border-amber-400 bg-amber-400/10' : 'border-white/8 hover:bg-white/5'}`}>
-                            {MOOD_EMOJIS[v]}
-                          </button>
-                        ))}
-                      </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-white/35 mb-2">Estado de Kira</p>
+                    <div className="flex gap-1">
+                      {([1,2,3,4,5] as const).map(v => (
+                        <button key={v} onClick={() => setDiaryKiraMood(v)}
+                          className={`flex-1 rounded-xl py-1.5 text-sm border transition ${diaryKiraMood === v ? 'border-amber-400 bg-amber-400/10' : 'border-white/8 hover:bg-white/5'}`}>
+                          {MOOD_EMOJIS[v]}
+                        </button>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-white/35 mb-2">Estado de Daniel</p>
+                    <div className="flex gap-1">
+                      {([1,2,3,4,5] as const).map(v => (
+                        <button key={v} onClick={() => setDiaryDanielMood(v)}
+                          className={`flex-1 rounded-xl py-1.5 text-sm border transition ${diaryDanielMood === v ? 'border-amber-400 bg-amber-400/10' : 'border-white/8 hover:bg-white/5'}`}>
+                          {MOOD_EMOJIS[v]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 <button onClick={handleDiarySave} disabled={!diaryNotes.trim()}
                   className="w-full rounded-2xl bg-amber-500 py-3 font-semibold text-black text-sm hover:bg-amber-400 transition disabled:opacity-40">
