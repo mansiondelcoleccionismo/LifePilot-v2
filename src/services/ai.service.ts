@@ -90,14 +90,10 @@ export function getActiveKeyInfo(): { provider: string; index: number } | null {
 // ── API callers ───────────────────────────────────────────────────────────────
 class RateLimitError extends Error {}
 
-const GEMINI_MODELS = [
-  'gemini-1.5-flash-latest',
-  'gemini-1.5-flash-8b-latest',
-]
+const GEMINI_MODEL = 'gemini-1.5-flash'
 
-async function callGeminiModel(
+async function callGemini(
   key: string,
-  model: string,
   prompt: string,
   imageData?: { data: string; mimeType: string },
 ): Promise<string> {
@@ -106,7 +102,7 @@ async function callGeminiModel(
   parts.push({ text: prompt })
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -127,23 +123,6 @@ async function callGeminiModel(
 
   const data = await res.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
   return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-}
-
-async function callGemini(
-  key: string,
-  prompt: string,
-  imageData?: { data: string; mimeType: string },
-): Promise<string> {
-  let lastErr: unknown
-  for (const model of GEMINI_MODELS) {
-    try {
-      return await callGeminiModel(key, model, prompt, imageData)
-    } catch (err) {
-      if (err instanceof RateLimitError) throw err
-      lastErr = err
-    }
-  }
-  throw lastErr
 }
 
 async function callGroq(key: string, prompt: string): Promise<string> {
@@ -208,21 +187,17 @@ export async function callAI(
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 export async function testGeminiKey(key: string): Promise<string | null> {
-  const errors: string[] = []
-  for (const model of GEMINI_MODELS) {
-    try {
-      const result = await callGeminiModel(key, model, 'Di "ok".', undefined)
-      return result.length > 0 ? null : `${model}: respuesta vacía`
-    } catch (err) {
-      const raw = err instanceof Error ? err.message : 'error desconocido'
-      const detail = raw.replace(/^Gemini \d+:?\s*/, '').trim()
-      if (raw.includes('401')) errors.push(`${model}: key inválida (401)`)
-      else if (raw.includes('403')) errors.push(`${model}: sin acceso (403)`)
-      else if (raw.includes('429')) errors.push(`${model}: quota=0`)
-      else errors.push(`${model}: ${detail.slice(0, 60) || raw}`)
-    }
+  try {
+    const result = await callGemini(key, 'Di "ok".', undefined)
+    return result.length > 0 ? null : 'Respuesta vacía'
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : 'error desconocido'
+    const detail = raw.replace(/^Gemini \d+:?\s*/, '').trim()
+    if (raw.includes('401')) return 'Key inválida (401)'
+    if (raw.includes('403')) return 'Sin acceso (403)'
+    if (raw.includes('429')) return 'Quota agotada (429)'
+    return detail.slice(0, 80) || raw
   }
-  return errors.join(' · ')
 }
 
 export async function testGroqKey(key: string): Promise<string | null> {
