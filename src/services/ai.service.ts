@@ -91,8 +91,8 @@ export function getActiveKeyInfo(): { provider: string; index: number } | null {
 class RateLimitError extends Error {}
 
 const GEMINI_MODELS = [
-  'gemini-1.5-flash',
-  'gemini-1.5-pro',
+  'gemini-1.5-flash-latest',
+  'gemini-1.5-flash-8b-latest',
 ]
 
 async function callGeminiModel(
