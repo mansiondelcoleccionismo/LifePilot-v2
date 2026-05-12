@@ -11,7 +11,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import type { FoodEntry } from '@/types/nutrition'
+import type { FoodEntry, MealType } from '@/types/nutrition'
 
 const COL = 'nutrition_entries'
 
@@ -45,13 +45,11 @@ export async function addNutritionEntry(
   protein: number,
   carbs: number,
   fat: number,
+  meal?: MealType,
 ) {
   await addDoc(collection(db, COL), {
-    name,
-    kcal,
-    protein,
-    carbs,
-    fat,
+    name, kcal, protein, carbs, fat,
+    ...(meal ? { meal } : {}),
     createdAt: serverTimestamp(),
   })
 }

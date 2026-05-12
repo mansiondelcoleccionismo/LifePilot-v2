@@ -1,56 +1,57 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Flame, Loader2, Bot, Trash2, X, Camera, Check, RotateCcw } from 'lucide-react'
+import {
+  Search, Flame, Loader2, Bot, Trash2, X, Camera, Check, RotateCcw,
+  Star, ChevronDown, ChevronRight, Plus, Minus,
+} from 'lucide-react'
 import { addNutritionEntry, deleteNutritionEntry, subscribeNutritionEntries } from '@/services/nutrition.service'
 import { searchFoods, type OpenFoodResult } from '@/services/openfoodfacts.service'
 import { callAI, hasAnyAIKey } from '@/services/ai.service'
-import { DAY_TARGETS, type DayType, type FoodEntry } from '@/types/nutrition'
+import { DAY_TARGETS, type DayType, type FoodEntry, type MealType } from '@/types/nutrition'
 import { loadProfile, autoDetectDayType, getTargetForDayType, getDayLabel } from '@/services/metabolic.service'
+import {
+  initFavorites, getFavorites, addFavorite, removeFavorite, incrementUsage,
+  type FoodFavorite,
+} from '@/services/favorites.service'
 import type { UserProfile } from '@/types/profile'
 
-const DAY_TYPE_OPTIONS: Array<{ value: DayType; label: string; emoji: string }> = [
-  { value: 'normal',   label: 'Normal',   emoji: '⚖️' },
-  { value: 'volumen',  label: 'Volumen',  emoji: '💪' },
-  { value: 'deficit',  label: 'Déficit',  emoji: '🔥' },
-  { value: 'descanso', label: 'Descanso', emoji: '😴' },
+// ─── Meal config ─────────────────────────────────────────────────────────────
+const MEALS: Array<{ value: MealType; label: string; emoji: string; hours: [number, number] }> = [
+  { value: 'desayuno',     label: 'Desayuno',      emoji: '🌅', hours: [6,  10] },
+  { value: 'media_manana', label: 'Media mañana',  emoji: '🍎', hours: [10, 12] },
+  { value: 'almuerzo',     label: 'Almuerzo',      emoji: '🍽️', hours: [12, 16] },
+  { value: 'merienda',     label: 'Merienda',      emoji: '☕', hours: [16, 19] },
+  { value: 'cena',         label: 'Cena',           emoji: '🌙', hours: [19, 23] },
+  { value: 'snack',        label: 'Snack',          emoji: '🍿', hours: [0,  6]  },
 ]
 
-interface SelectedFood {
-  name: string
-  brand?: string
-  per100g: { kcal: number; protein: number; carbs: number; fat: number }
+function getMealForTime(date = new Date()): MealType {
+  const h = date.getHours()
+  const m = MEALS.find(ml => h >= ml.hours[0] && h < ml.hours[1])
+  return m?.value ?? 'snack'
+}
+
+function getMealLabel(meal: MealType) {
+  return MEALS.find(m => m.value === meal) ?? MEALS[5]
 }
 
 function getDayTypeKey() {
   return `nutrition_daytype_${new Date().toISOString().split('T')[0]}`
 }
 
-async function fetchAIMacros(
-  food: string,
-): Promise<{ kcal: number; protein: number; carbs: number; fat: number } | null> {
-  try {
-    const prompt = `Dame macros de ${food} por 100g. Responde SOLO JSON: {"kcal":number,"protein":number,"carbs":number,"fat":number}`
-    const text = await callAI(prompt)
-    const match = text.match(/\{[\s\S]*?\}/)
-    if (!match) return null
-    return JSON.parse(match[0])
-  } catch {
-    return null
-  }
+// ─── Confirm food interface ────────────────────────────────────────────────
+interface ConfirmFood {
+  name: string
+  brand?: string
+  emoji?: string
+  imageUrl?: string
+  per100g: { kcal: number; protein: number; carbs: number; fat: number }
+  defaultGrams: number
+  isFavorite: boolean
+  favoriteId?: string
 }
 
-// ─── Foto al plato — tipos ────────────────────────────────────────────────────
-interface PhotoFood {
-  nombre: string; gramos: number
-  kcal: number; protein: number; carbs: number; fat: number
-}
-interface PhotoResult {
-  descripcion: string
-  alimentos: PhotoFood[]
-  totales: { kcal: number; protein: number; carbs: number; fat: number }
-}
-
-// Redimensiona la imagen a max 1024px y la convierte a base64
+// ─── Resize/encode for photo ─────────────────────────────────────────────────
 async function resizeAndEncode(file: File): Promise<{ data: string; mimeType: string }> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -76,6 +77,9 @@ async function resizeAndEncode(file: File): Promise<{ data: string; mimeType: st
   })
 }
 
+interface PhotoFood { nombre: string; gramos: number; kcal: number; protein: number; carbs: number; fat: number }
+interface PhotoResult { descripcion: string; alimentos: PhotoFood[]; totales: { kcal: number; protein: number; carbs: number; fat: number } }
+
 async function analyzePhoto(file: File): Promise<PhotoResult> {
   const { data, mimeType } = await resizeAndEncode(file)
   const prompt = `Analiza esta foto de comida. Identifica todos los alimentos visibles y estima las cantidades en gramos. Devuelve SOLO un JSON válido con este formato exacto, sin texto adicional:
@@ -88,23 +92,20 @@ async function analyzePhoto(file: File): Promise<PhotoResult> {
 }
 
 // ─── PhotoModal ───────────────────────────────────────────────────────────────
-function PhotoModal({ onClose }: { onClose: () => void }) {
+function PhotoModal({ onClose, onAddedMeal }: { onClose: () => void; onAddedMeal: MealType }) {
   const [step, setStep] = useState<'select' | 'preview' | 'analyzing' | 'result' | 'error'>('select')
-  const [file, setFile]     = useState<File | null>(null)
+  const [file, setFile]       = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [result, setResult]   = useState<PhotoResult | null>(null)
   const [error, setError]     = useState('')
   const [checked, setChecked] = useState<Set<number>>(new Set())
   const [adding, setAdding]   = useState(false)
+  const [meal, setMeal]       = useState<MealType>(onAddedMeal)
   const cameraRef = useRef<HTMLInputElement>(null)
   const fileRef   = useRef<HTMLInputElement>(null)
   const hasKey    = hasAnyAIKey()
 
-  function handleFile(f: File) {
-    setFile(f)
-    setPreview(URL.createObjectURL(f))
-    setStep('preview')
-  }
+  function handleFile(f: File) { setFile(f); setPreview(URL.createObjectURL(f)); setStep('preview') }
 
   async function handleAnalyze() {
     if (!file) return
@@ -116,13 +117,11 @@ function PhotoModal({ onClose }: { onClose: () => void }) {
       setStep('result')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      if (msg === 'NO_FOOD' || msg === 'PARSE_ERROR') {
-        setError('No he podido identificar los alimentos. Intenta con mejor iluminación.')
-      } else if (msg.includes('Sin créditos')) {
-        setError('Sin créditos de IA disponibles. Configura más API keys en Ajustes.')
-      } else {
-        setError(`Error al analizar: ${msg}`)
-      }
+      setError(msg === 'NO_FOOD' || msg === 'PARSE_ERROR'
+        ? 'No he podido identificar los alimentos. Intenta con mejor iluminación.'
+        : msg.includes('Sin créditos')
+          ? 'Sin créditos de IA. Configura más API keys en Ajustes.'
+          : `Error: ${msg}`)
       setStep('error')
     }
   }
@@ -138,6 +137,7 @@ function PhotoModal({ onClose }: { onClose: () => void }) {
         Math.round(food.protein * 10) / 10,
         Math.round(food.carbs * 10) / 10,
         Math.round(food.fat * 10) / 10,
+        meal,
       )
     }
     setAdding(false)
@@ -145,13 +145,7 @@ function PhotoModal({ onClose }: { onClose: () => void }) {
   }
 
   const toggleCheck = (i: number) =>
-    setChecked((prev) => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s })
-
-  function macroColor(food: PhotoFood) {
-    if (food.protein >= food.carbs && food.protein >= food.fat) return 'border-blue-500/25 bg-blue-500/8'
-    if (food.carbs >= food.protein && food.carbs >= food.fat)   return 'border-amber-500/25 bg-amber-500/8'
-    return 'border-rose-500/25 bg-rose-500/8'
-  }
+    setChecked(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s })
 
   const selTotals = useMemo(() => {
     if (!result) return null
@@ -168,28 +162,21 @@ function PhotoModal({ onClose }: { onClose: () => void }) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <motion.div
-        initial={{ opacity: 0, y: 40, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 20, scale: 0.97 }}
+        initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
         transition={{ type: 'spring', damping: 26, stiffness: 320 }}
         className="w-full max-w-md rounded-3xl bg-[#13131b] border border-white/10 overflow-hidden max-h-[90vh] flex flex-col"
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/6 shrink-0">
           <div>
             <p className="text-[10px] uppercase tracking-widest text-white/25">Gemini Vision</p>
             <h3 className="text-base font-semibold text-white/90 mt-0.5">Analizar plato</h3>
           </div>
-          <button onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition">
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition">
             <X size={15} className="text-white/60" />
           </button>
         </div>
 
-        {/* Body */}
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
-
-          {/* select */}
           {step === 'select' && (
             <>
               {!hasKey && (
@@ -200,19 +187,16 @@ function PhotoModal({ onClose }: { onClose: () => void }) {
               <p className="text-sm text-white/45 text-center pt-2">¿Cómo quieres añadir la foto?</p>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => cameraRef.current?.click()} disabled={!hasKey}
-                  className="flex flex-col items-center gap-3 rounded-2xl border border-white/8 bg-white/4 p-6 hover:bg-white/8 transition disabled:opacity-35 disabled:cursor-not-allowed">
+                  className="flex flex-col items-center gap-3 rounded-2xl border border-white/8 bg-white/4 p-6 hover:bg-white/8 transition disabled:opacity-35">
                   <span className="text-4xl">📷</span>
                   <span className="text-sm font-medium text-white/75">Hacer foto</span>
-                  <span className="text-[10px] text-white/30 text-center leading-snug">Usa la cámara del móvil</span>
                 </button>
                 <button onClick={() => fileRef.current?.click()} disabled={!hasKey}
-                  className="flex flex-col items-center gap-3 rounded-2xl border border-white/8 bg-white/4 p-6 hover:bg-white/8 transition disabled:opacity-35 disabled:cursor-not-allowed">
+                  className="flex flex-col items-center gap-3 rounded-2xl border border-white/8 bg-white/4 p-6 hover:bg-white/8 transition disabled:opacity-35">
                   <span className="text-4xl">🖼️</span>
-                  <span className="text-sm font-medium text-white/75">Subir imagen</span>
-                  <span className="text-[10px] text-white/30 text-center leading-snug">Elige de la galería</span>
+                  <span className="text-sm font-medium text-white/75">Galería</span>
                 </button>
               </div>
-              {/* Hidden inputs */}
               <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
                 onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
               <input ref={fileRef} type="file" accept="image/*" className="hidden"
@@ -220,16 +204,12 @@ function PhotoModal({ onClose }: { onClose: () => void }) {
             </>
           )}
 
-          {/* preview */}
           {step === 'preview' && preview && (
             <>
-              <div className="rounded-2xl overflow-hidden">
-                <img src={preview} alt="Preview del plato" className="w-full object-cover max-h-60" />
-              </div>
+              <div className="rounded-2xl overflow-hidden"><img src={preview} alt="" className="w-full object-cover max-h-60" /></div>
               <button onClick={handleAnalyze}
                 className="w-full rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white hover:bg-violet-500 transition flex items-center justify-center gap-2">
-                <Bot size={15} />
-                Analizar con IA
+                <Bot size={15} /> Analizar con IA
               </button>
               <button onClick={() => { setStep('select'); setPreview(null); setFile(null) }}
                 className="w-full rounded-2xl border border-white/8 bg-white/4 py-2.5 text-sm text-white/40 hover:text-white/65 transition">
@@ -238,50 +218,40 @@ function PhotoModal({ onClose }: { onClose: () => void }) {
             </>
           )}
 
-          {/* analyzing */}
           {step === 'analyzing' && (
             <div className="flex flex-col items-center justify-center py-10 gap-5">
-              {preview && (
-                <div className="w-20 h-20 rounded-2xl overflow-hidden opacity-55 ring-1 ring-white/10">
-                  <img src={preview} alt="" className="w-full h-full object-cover" />
-                </div>
-              )}
+              {preview && <div className="w-20 h-20 rounded-2xl overflow-hidden opacity-55"><img src={preview} alt="" className="w-full h-full object-cover" /></div>}
               <Loader2 size={30} className="text-violet-400 animate-spin" />
-              <div className="text-center">
-                <p className="text-sm font-medium text-white/70">Analizando tu plato...</p>
-                <p className="text-xs text-white/30 mt-1">Gemini Vision identificando alimentos</p>
-              </div>
+              <p className="text-sm text-white/60">Analizando tu plato...</p>
             </div>
           )}
 
-          {/* result */}
           {step === 'result' && result && (
             <>
               <div className="rounded-xl bg-violet-500/8 border border-violet-500/15 p-3">
-                <p className="text-[10px] uppercase tracking-widest text-violet-400/60 mb-1">Plato detectado</p>
+                <p className="text-[10px] uppercase tracking-widest text-violet-400/60 mb-1">Detectado</p>
                 <p className="text-sm text-white/80">{result.descripcion}</p>
               </div>
-
-              {preview && (
-                <div className="rounded-xl overflow-hidden h-24">
-                  <img src={preview} alt="" className="w-full h-full object-cover" />
-                </div>
-              )}
-
+              {/* Meal selector */}
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">
-                  Alimentos identificados — toca para incluir/excluir
-                </p>
+                <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">Añadir a</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {MEALS.map(m => (
+                    <button key={m.value} onClick={() => setMeal(m.value)}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-medium transition ${meal === m.value ? 'bg-blue-500/20 border border-blue-500/40 text-blue-300' : 'bg-white/4 border border-white/8 text-white/50 hover:border-white/14'}`}>
+                      {m.emoji} {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">Alimentos</p>
                 <div className="space-y-2">
                   {result.alimentos.map((food, i) => (
                     <button key={i} onClick={() => toggleCheck(i)}
-                      className={`w-full text-left rounded-xl border p-3 transition ${
-                        checked.has(i) ? macroColor(food) : 'border-white/6 bg-white/3 opacity-45'
-                      }`}>
-                      <div className="flex items-start gap-3">
-                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition ${
-                          checked.has(i) ? 'bg-emerald-500 border-emerald-500' : 'bg-white/8 border-white/15'
-                        }`}>
+                      className={`w-full text-left rounded-xl border p-3 transition ${checked.has(i) ? 'border-emerald-500/25 bg-emerald-500/8' : 'border-white/6 bg-white/3 opacity-45'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${checked.has(i) ? 'bg-emerald-500 border-emerald-500' : 'bg-white/8 border-white/15'}`}>
                           {checked.has(i) && <Check size={11} className="text-white" />}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -289,7 +259,7 @@ function PhotoModal({ onClose }: { onClose: () => void }) {
                             <p className="text-sm font-medium text-white/85 truncate">{food.nombre}</p>
                             <span className="text-xs text-white/35 shrink-0">{food.gramos}g</span>
                           </div>
-                          <div className="flex gap-3 mt-1 flex-wrap">
+                          <div className="flex gap-3 mt-0.5">
                             <span className="text-[11px] text-orange-400">{Math.round(food.kcal)} kcal</span>
                             <span className="text-[11px] text-blue-400">P {Math.round(food.protein)}g</span>
                             <span className="text-[11px] text-amber-400">C {Math.round(food.carbs)}g</span>
@@ -301,36 +271,17 @@ function PhotoModal({ onClose }: { onClose: () => void }) {
                   ))}
                 </div>
               </div>
-
               {selTotals && checked.size > 0 && (
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">Total seleccionado</p>
-                  <div className="grid grid-cols-4 gap-2 mb-3">
-                    {[
-                      { l: 'Kcal',   v: Math.round(selTotals.kcal),              c: 'text-orange-400', bg: 'bg-orange-500/10' },
-                      { l: 'Prot',   v: `${Math.round(selTotals.protein)}g`,     c: 'text-blue-400',   bg: 'bg-blue-500/10'   },
-                      { l: 'Carbs',  v: `${Math.round(selTotals.carbs)}g`,       c: 'text-amber-400',  bg: 'bg-amber-500/10'  },
-                      { l: 'Grasas', v: `${Math.round(selTotals.fat)}g`,         c: 'text-rose-400',   bg: 'bg-rose-500/10'   },
-                    ].map((m) => (
-                      <div key={m.l} className={`rounded-xl ${m.bg} p-2.5 text-center`}>
-                        <p className={`text-sm font-bold ${m.c}`}>{m.v}</p>
-                        <p className="text-[10px] text-white/30 mt-0.5">{m.l}</p>
-                      </div>
-                    ))}
-                  </div>
+                <div className="grid grid-cols-4 gap-2">
                   {[
-                    { label: 'Proteína', val: selTotals.protein, max: 50, color: 'bg-blue-500' },
-                    { label: 'Carbos',   val: selTotals.carbs,   max: 100, color: 'bg-amber-500' },
-                    { label: 'Grasas',   val: selTotals.fat,     max: 40,  color: 'bg-rose-500' },
-                  ].map((b) => (
-                    <div key={b.label} className="flex items-center gap-2 mb-1.5">
-                      <span className="text-[10px] text-white/30 w-14 shrink-0">{b.label}</span>
-                      <div className="flex-1 h-1.5 rounded-full bg-white/6 overflow-hidden">
-                        <motion.div initial={{ width: 0 }}
-                          animate={{ width: `${Math.min(100, (b.val / b.max) * 100)}%` }}
-                          transition={{ duration: 0.6 }}
-                          className={`h-full rounded-full ${b.color}`} />
-                      </div>
+                    { l: 'Kcal', v: Math.round(selTotals.kcal), c: 'text-orange-400' },
+                    { l: 'Prot', v: `${Math.round(selTotals.protein)}g`, c: 'text-blue-400' },
+                    { l: 'Carbs', v: `${Math.round(selTotals.carbs)}g`, c: 'text-amber-400' },
+                    { l: 'Grasa', v: `${Math.round(selTotals.fat)}g`, c: 'text-rose-400' },
+                  ].map(m => (
+                    <div key={m.l} className="rounded-xl bg-white/5 p-2.5 text-center">
+                      <p className={`text-sm font-bold ${m.c}`}>{m.v}</p>
+                      <p className="text-[10px] text-white/30 mt-0.5">{m.l}</p>
                     </div>
                   ))}
                 </div>
@@ -338,33 +289,26 @@ function PhotoModal({ onClose }: { onClose: () => void }) {
             </>
           )}
 
-          {/* error */}
           {step === 'error' && (
             <div className="text-center py-8 space-y-4">
               <div className="text-5xl">😕</div>
               <p className="text-sm text-white/60 leading-relaxed px-2">{error}</p>
               {!error.includes('Ajustes') && (
                 <button onClick={() => { setStep('preview'); setError('') }}
-                  className="inline-flex items-center gap-2 rounded-xl bg-white/8 border border-white/10 px-4 py-2.5 text-sm text-white/55 hover:text-white/80 transition">
-                  <RotateCcw size={14} />
-                  Reintentar
+                  className="inline-flex items-center gap-2 rounded-xl bg-white/8 border border-white/10 px-4 py-2.5 text-sm text-white/55">
+                  <RotateCcw size={14} /> Reintentar
                 </button>
               )}
             </div>
           )}
         </div>
 
-        {/* Footer — solo en resultado */}
         {step === 'result' && (
           <div className="px-5 pb-5 pt-2 space-y-2 shrink-0 border-t border-white/5">
             <button onClick={handleAdd} disabled={adding || checked.size === 0}
               className="w-full rounded-2xl bg-emerald-600 py-3.5 text-sm font-semibold text-white hover:bg-emerald-500 transition disabled:opacity-40 flex items-center justify-center gap-2">
               {adding && <Loader2 size={14} className="animate-spin" />}
-              {adding ? 'Añadiendo...' : `Añadir ${checked.size} alimento${checked.size !== 1 ? 's' : ''} al día`}
-            </button>
-            <button onClick={onClose}
-              className="w-full rounded-2xl border border-white/8 bg-white/4 py-2.5 text-sm text-white/35 hover:text-white/60 transition">
-              Editar manualmente
+              {adding ? 'Añadiendo...' : `Añadir ${checked.size} alimento${checked.size !== 1 ? 's' : ''}`}
             </button>
           </div>
         )}
@@ -373,559 +317,578 @@ function PhotoModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-function MacroBar({
-  label,
-  value,
-  target,
-  color,
-}: {
-  label: string
-  value: number
-  target: number
-  color: string
-}) {
+// ─── MacroBar ─────────────────────────────────────────────────────────────────
+function MacroBar({ label, value, target, color }: { label: string; value: number; target: number; color: string }) {
   const pct = target > 0 ? Math.min(100, Math.round((value / target) * 100)) : 0
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5 text-xs">
         <span className="text-white/50">{label}</span>
-        <span className="text-white/70 font-medium">
-          {value}<span className="text-white/30">/{target}g</span>
-        </span>
+        <span className="text-white/70 font-medium">{value}<span className="text-white/30">/{target}g</span></span>
       </div>
       <div className="h-1.5 rounded-full bg-white/6 overflow-hidden">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.6, ease: 'easeOut' }}
-          className={`h-full rounded-full ${color}`}
-        />
+        <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.6 }}
+          className={`h-full rounded-full ${color}`} />
       </div>
       <p className="text-[10px] text-white/25 mt-1 text-right">{pct}%</p>
     </div>
   )
 }
 
-export function NutricionPage() {
-  const [entries, setEntries] = useState<FoodEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
+// ─── FoodImage helper ─────────────────────────────────────────────────────────
+function FoodThumb({ imageUrl, emoji, size = 'sm' }: { imageUrl?: string; emoji?: string; size?: 'sm' | 'lg' }) {
+  const [err, setErr] = useState(false)
+  const dim = size === 'lg' ? 'w-16 h-16 text-4xl' : 'w-10 h-10 text-2xl'
+  if (imageUrl && !err) {
+    return (
+      <img src={imageUrl} alt="" onError={() => setErr(true)}
+        className={`${size === 'lg' ? 'w-16 h-16' : 'w-10 h-10'} rounded-xl object-cover shrink-0 bg-white/5`} />
+    )
+  }
+  return <div className={`${dim} rounded-xl bg-white/8 flex items-center justify-center shrink-0`}>{emoji ?? '🍽️'}</div>
+}
 
-  const [dayType, setDayType] = useState<DayType>(() => {
-    return (localStorage.getItem(getDayTypeKey()) as DayType) ?? 'normal'
-  })
+// ─── ConfirmModal ─────────────────────────────────────────────────────────────
+function ConfirmModal({
+  food, onClose, onAdded, favorites, onFavoritesChange,
+}: {
+  food: ConfirmFood
+  onClose: () => void
+  onAdded: () => void
+  favorites: FoodFavorite[]
+  onFavoritesChange: () => void
+}) {
+  const [grams, setGrams] = useState(food.defaultGrams.toString())
+  const [meal, setMeal] = useState<MealType>(getMealForTime())
+  const [adding, setAdding] = useState(false)
+  const [savingFav, setSavingFav] = useState(false)
+  const [isFav, setIsFav] = useState(food.isFavorite)
+  const [favId, setFavId] = useState(food.favoriteId)
+
+  const macros = useMemo(() => {
+    const g = Number(grams)
+    if (!g || g <= 0) return null
+    const ratio = g / 100
+    return {
+      kcal:    Math.round(food.per100g.kcal    * ratio),
+      protein: Math.round(food.per100g.protein * ratio * 10) / 10,
+      carbs:   Math.round(food.per100g.carbs   * ratio * 10) / 10,
+      fat:     Math.round(food.per100g.fat     * ratio * 10) / 10,
+    }
+  }, [grams, food])
+
+  function adjustGrams(delta: number) {
+    const cur = Number(grams) || 0
+    setGrams(String(Math.max(1, Math.round((cur + delta) / 5) * 5)))
+  }
+
+  async function handleAdd() {
+    if (!macros) return
+    setAdding(true)
+    const name = Number(grams) !== food.defaultGrams
+      ? `${food.name} (${grams}g)` : food.name
+    await addNutritionEntry(name, macros.kcal, macros.protein, macros.carbs, macros.fat, meal)
+    if (favId) {
+      localStorage.setItem(`lp_lastgrams_${favId}`, grams)
+      await incrementUsage(favId)
+    }
+    setAdding(false)
+    onAdded()
+    onClose()
+  }
+
+  async function handleToggleFav() {
+    setSavingFav(true)
+    if (isFav && favId) {
+      await removeFavorite(favId)
+      setIsFav(false)
+      setFavId(undefined)
+    } else {
+      const id = await addFavorite({
+        name: food.name,
+        emoji: food.emoji ?? '🍽️',
+        category: '',
+        imageUrl: food.imageUrl,
+        per100g: food.per100g,
+        defaultGrams: Number(grams) || food.defaultGrams,
+      })
+      setIsFav(true)
+      setFavId(id)
+    }
+    onFavoritesChange()
+    setSavingFav(false)
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/65 backdrop-blur-sm"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 48 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 48 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+        className="w-full sm:max-w-sm bg-[#13131b] rounded-t-3xl sm:rounded-3xl border-t sm:border border-white/10 overflow-hidden"
+      >
+        {/* Food header */}
+        <div className="flex items-center gap-4 px-5 pt-6 pb-4">
+          <FoodThumb imageUrl={food.imageUrl} emoji={food.emoji} size="lg" />
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold text-white/90 leading-snug">{food.name}</h3>
+            {food.brand && <p className="text-xs text-white/35 mt-0.5">{food.brand}</p>}
+            {macros && (
+              <p className="text-xs text-white/45 mt-1">
+                <span className="text-orange-400 font-semibold">{macros.kcal} kcal</span>
+                <span className="text-white/30"> · P {macros.protein}g · C {macros.carbs}g · G {macros.fat}g</span>
+              </p>
+            )}
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center shrink-0">
+            <X size={15} className="text-white/60" />
+          </button>
+        </div>
+
+        <div className="px-5 pb-6 space-y-5">
+          {/* Grams input */}
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">Cantidad</p>
+            <div className="flex items-center gap-3">
+              <button onClick={() => adjustGrams(-10)}
+                className="w-10 h-10 rounded-xl bg-white/6 hover:bg-white/10 flex items-center justify-center transition">
+                <Minus size={16} className="text-white/60" />
+              </button>
+              <div className="flex-1 relative">
+                <input
+                  value={grams}
+                  onChange={(e) => setGrams(e.target.value.replace(/[^0-9]/g, ''))}
+                  inputMode="numeric"
+                  className="w-full rounded-xl bg-white/6 border border-white/8 px-3 py-2.5 text-center text-lg font-semibold text-white/90 focus:outline-none focus:border-blue-500/40"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-white/35">g</span>
+              </div>
+              <button onClick={() => adjustGrams(10)}
+                className="w-10 h-10 rounded-xl bg-white/6 hover:bg-white/10 flex items-center justify-center transition">
+                <Plus size={16} className="text-white/60" />
+              </button>
+            </div>
+            {/* Quick amounts */}
+            <div className="flex gap-1.5 mt-2 flex-wrap">
+              {[food.defaultGrams, 50, 100, 150, 200].filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => a - b).slice(0, 5).map(g => (
+                <button key={g} onClick={() => setGrams(String(g))}
+                  className={`rounded-lg px-2.5 py-1 text-xs transition ${Number(grams) === g ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-white/4 text-white/40 hover:text-white/60 border border-white/6'}`}>
+                  {g}g
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Meal selector */}
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">Comida</p>
+            <div className="flex gap-1.5 flex-wrap">
+              {MEALS.map(m => (
+                <button key={m.value} onClick={() => setMeal(m.value)}
+                  className={`rounded-xl px-2.5 py-1.5 text-xs font-medium transition ${meal === m.value ? 'bg-blue-500/20 border border-blue-500/40 text-blue-300' : 'bg-white/4 border border-white/6 text-white/50 hover:border-white/12'}`}>
+                  {m.emoji} {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-2 pt-1">
+            <button onClick={handleAdd} disabled={adding || !macros}
+              className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-500 transition disabled:opacity-40 flex items-center justify-center gap-2">
+              {adding && <Loader2 size={13} className="animate-spin" />}
+              Añadir al día
+            </button>
+            <button onClick={handleToggleFav} disabled={savingFav}
+              className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition ${isFav ? 'bg-amber-500/15 border-amber-500/30' : 'bg-white/4 border-white/8 hover:border-white/14'}`}>
+              {savingFav ? <Loader2 size={15} className="animate-spin text-white/40" /> : <Star size={15} className={isFav ? 'fill-amber-400 text-amber-400' : 'text-white/40'} />}
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ─── DAY_TYPE options ─────────────────────────────────────────────────────────
+const DAY_TYPE_OPTIONS: Array<{ value: DayType; label: string; emoji: string }> = [
+  { value: 'normal',   label: 'Normal',   emoji: '⚖️' },
+  { value: 'volumen',  label: 'Volumen',  emoji: '💪' },
+  { value: 'deficit',  label: 'Déficit',  emoji: '🔥' },
+  { value: 'descanso', label: 'Descanso', emoji: '😴' },
+]
+
+// ─── NutricionPage ────────────────────────────────────────────────────────────
+export function NutricionPage() {
+  const [entries, setEntries]       = useState<FoodEntry[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [favorites, setFavorites]   = useState<FoodFavorite[]>([])
+  const [profile, setProfile]       = useState<UserProfile | null>(null)
+
+  const [dayType, setDayType] = useState<DayType>(() =>
+    (localStorage.getItem(getDayTypeKey()) as DayType) ?? 'normal'
+  )
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<OpenFoodResult[]>([])
-  const [searching, setSearching] = useState(false)
-  const [hasSearched, setHasSearched] = useState(false)
-  const [showDropdown, setShowDropdown] = useState(false)
+  const [offResults, setOffResults]   = useState<OpenFoodResult[]>([])
+  const [searching, setSearching]     = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const searchRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
-  const [selectedFood, setSelectedFood] = useState<SelectedFood | null>(null)
-  const [grams, setGrams] = useState('100')
-
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiError, setAiError] = useState('')
+  const [confirmFood, setConfirmFood] = useState<ConfirmFood | null>(null)
   const [showPhotoModal, setShowPhotoModal] = useState(false)
+  const [expandedMeals, setExpandedMeals] = useState<Set<MealType>>(
+    () => new Set<MealType>(['desayuno', 'almuerzo', 'cena'])
+  )
 
-  const todayDate = new Date().toLocaleDateString('es-ES', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  })
+  const todayDate = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
 
+  // ── Load profile + favorites ──────────────────────────────────────────────
   useEffect(() => {
     const p = loadProfile()
     setProfile(p)
-    // Auto-detect day type only if user hasn't overridden today
-    const savedDayType = localStorage.getItem(getDayTypeKey()) as DayType | null
-    if (!savedDayType) {
-      setDayType(autoDetectDayType(p))
-    }
+    const saved = localStorage.getItem(getDayTypeKey()) as DayType | null
+    if (!saved) setDayType(autoDetectDayType(p))
+
+    // Init + load favorites
+    initFavorites().then(() => getFavorites().then(setFavorites))
   }, [])
 
+  const reloadFavorites = () => getFavorites().then(setFavorites)
+
+  // ── Entries subscription ──────────────────────────────────────────────────
   useEffect(() => {
-    const unsub = subscribeNutritionEntries((data) => {
-      setEntries(data)
-      setLoading(false)
-    })
+    const unsub = subscribeNutritionEntries(data => { setEntries(data); setLoading(false) })
     return () => unsub()
   }, [])
 
+  // ── Auto-expand meal with entries ────────────────────────────────────────
   useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setShowDropdown(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+    if (!entries.length) return
+    const activeMeals = new Set(entries.map(e => e.meal ?? getMealForTime(e.createdAt)))
+    setExpandedMeals(prev => new Set([...prev, ...activeMeals]))
+  }, [entries.length])
 
+  // ── Targets ──────────────────────────────────────────────────────────────
   const target = useMemo(() => {
     if (profile) return getTargetForDayType(profile, dayType)
     return DAY_TARGETS[dayType]
   }, [profile, dayType])
 
-  const totals = useMemo(
-    () =>
-      entries.reduce(
-        (acc, e) => ({
-          kcal: acc.kcal + e.kcal,
-          protein: acc.protein + e.protein,
-          carbs: acc.carbs + e.carbs,
-          fat: acc.fat + e.fat,
-        }),
-        { kcal: 0, protein: 0, carbs: 0, fat: 0 },
-      ),
-    [entries],
-  )
+  const totals = useMemo(() =>
+    entries.reduce((a, e) => ({ kcal: a.kcal + e.kcal, protein: a.protein + e.protein, carbs: a.carbs + e.carbs, fat: a.fat + e.fat }),
+      { kcal: 0, protein: 0, carbs: 0, fat: 0 }), [entries])
 
-  const kcalPct = target.kcal > 0 ? Math.min(100, Math.round((totals.kcal / target.kcal) * 100)) : 0
+  const kcalPct = target.kcal > 0 ? Math.min(100, (totals.kcal / target.kcal) * 100) : 0
 
-  const computedMacros = useMemo(() => {
-    if (!selectedFood || !grams || Number(grams) <= 0) return null
-    const ratio = Number(grams) / 100
-    return {
-      kcal:    Math.round(selectedFood.per100g.kcal    * ratio),
-      protein: Math.round(selectedFood.per100g.protein * ratio * 10) / 10,
-      carbs:   Math.round(selectedFood.per100g.carbs   * ratio * 10) / 10,
-      fat:     Math.round(selectedFood.per100g.fat     * ratio * 10) / 10,
-    }
-  }, [selectedFood, grams])
+  // ── Search ────────────────────────────────────────────────────────────────
+  const filteredFavs = useMemo(() => {
+    if (!searchQuery.trim()) return []
+    const q = searchQuery.toLowerCase()
+    return favorites.filter(f => f.name.toLowerCase().includes(q) || f.category?.toLowerCase().includes(q))
+  }, [searchQuery, favorites])
+
+  function handleSearchInput(value: string) {
+    setSearchQuery(value)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!value.trim()) { setOffResults([]); setSearching(false); return }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true)
+      const results = await searchFoods(value)
+      setOffResults(results)
+      setSearching(false)
+    }, 500)
+  }
+
+  // ── Open confirm ──────────────────────────────────────────────────────────
+  function openFavorite(fav: FoodFavorite) {
+    const lastG = localStorage.getItem(`lp_lastgrams_${fav.id}`)
+    setConfirmFood({
+      name: fav.name, emoji: fav.emoji, imageUrl: fav.imageUrl,
+      per100g: fav.per100g, defaultGrams: (lastG ? Number(lastG) : null) || fav.defaultGrams,
+      isFavorite: true, favoriteId: fav.id,
+    })
+  }
+
+  function openFoodResult(r: OpenFoodResult) {
+    const existing = favorites.find(f => f.name.toLowerCase() === r.name.toLowerCase())
+    setConfirmFood({
+      name: r.name, brand: r.brand, imageUrl: r.imageUrl,
+      per100g: r.per100g, defaultGrams: 100,
+      isFavorite: !!existing, favoriteId: existing?.id,
+    })
+  }
+
+  // ── Grouped entries ───────────────────────────────────────────────────────
+  const entriesByMeal = useMemo(() => {
+    const groups = Object.fromEntries(MEALS.map(m => [m.value, [] as FoodEntry[]])) as Record<MealType, FoodEntry[]>
+    entries.forEach(e => { const meal = e.meal ?? getMealForTime(e.createdAt); groups[meal].push(e) })
+    return groups
+  }, [entries])
+
+  function toggleMeal(meal: MealType) {
+    setExpandedMeals(prev => { const s = new Set(prev); s.has(meal) ? s.delete(meal) : s.add(meal); return s })
+  }
 
   function handleDayTypeChange(dt: DayType) {
     setDayType(dt)
     localStorage.setItem(getDayTypeKey(), dt)
   }
 
-  function handleSearchInput(value: string) {
-    setSearchQuery(value)
-    setAiError('')
-    if (!value.trim()) {
-      setSearchResults([])
-      setHasSearched(false)
-      setShowDropdown(false)
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      return
-    }
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(async () => {
-      setSearching(true)
-      setHasSearched(false)
-      const results = await searchFoods(value)
-      setSearchResults(results)
-      setHasSearched(true)
-      setSearching(false)
-      setShowDropdown(true)
-    }, 500)
-  }
-
-  function selectFood(food: OpenFoodResult) {
-    setSelectedFood({ name: food.name, brand: food.brand, per100g: food.per100g })
-    setGrams('100')
-    setShowDropdown(false)
-    setSearchQuery(food.name)
-  }
-
-  async function handleAISearch() {
-    if (!searchQuery.trim()) return
-    setAiLoading(true)
-    setAiError('')
-    setShowDropdown(false)
-    const macros = await fetchAIMacros(searchQuery.trim())
-    setAiLoading(false)
-    if (!macros) {
-      setAiError('No se pudo obtener datos de la IA. Inténtalo de nuevo.')
-      return
-    }
-    setSelectedFood({ name: searchQuery.trim(), per100g: macros })
-    setGrams('100')
-  }
-
-  async function handleAdd() {
-    if (!selectedFood || !computedMacros || Number(grams) <= 0) return
-    const name =
-      Number(grams) !== 100
-        ? `${selectedFood.name} (${grams}g)`
-        : selectedFood.name
-    await addNutritionEntry(name, computedMacros.kcal, computedMacros.protein, computedMacros.carbs, computedMacros.fat)
-    setSelectedFood(null)
-    setSearchQuery('')
-    setSearchResults([])
-    setHasSearched(false)
-    setGrams('100')
-  }
-
-  function clearSelection() {
-    setSelectedFood(null)
-    setSearchQuery('')
-    setSearchResults([])
-    setHasSearched(false)
-    setGrams('100')
-    setAiError('')
-  }
+  const isSearching = searchQuery.trim().length > 0
 
   return (
-    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-5xl mx-auto">
+    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-2xl mx-auto pb-28">
 
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm text-white/35 capitalize">{todayDate}</p>
-            <h1 className="text-3xl font-bold text-white/90 mt-1">Nutrición</h1>
-          </div>
-          <div className="rounded-2xl border border-white/8 bg-[#1E1E28]/80 px-4 py-3 text-sm text-white/65">
-            {entries.length} alimento{entries.length === 1 ? '' : 's'} registrado{entries.length === 1 ? '' : 's'} hoy
-          </div>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-5">
+        <p className="text-sm text-white/35 capitalize">{todayDate}</p>
+        <div className="flex items-end justify-between mt-1">
+          <h1 className="text-3xl font-bold text-white/90">Nutrición</h1>
+          <span className="text-xs text-white/30 mb-1">{profile ? getDayLabel(profile) : ''}</span>
         </div>
       </motion.div>
 
-      {/* Day type selector — full width */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-        className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5 mb-4"
-      >
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">Tipo de día</p>
-            <h2 className="text-lg font-semibold text-white/90 mt-1">
-              {profile ? getDayLabel(profile) : 'Selecciona tu objetivo'}
-            </h2>
-          </div>
-          <p className="text-sm text-white/40 hidden sm:block">
-            {target.kcal} kcal · P {target.protein}g · C {target.carbs}g · G {target.fat}g
-          </p>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {DAY_TYPE_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => handleDayTypeChange(opt.value)}
-              className={`rounded-2xl border py-3 text-sm font-medium transition-all ${
-                dayType === opt.value
-                  ? 'border-blue-500/40 bg-blue-500/10 text-white'
-                  : 'border-white/8 bg-white/3 text-white/60 hover:border-white/14'
-              }`}
-            >
-              {opt.emoji} {opt.label}
-            </button>
-          ))}
-        </div>
-        <p className="text-[10px] text-white/25 mt-3 sm:hidden">
-          Objetivo: {target.kcal} kcal · P {target.protein}g · C {target.carbs}g · G {target.fat}g
-        </p>
-      </motion.div>
-
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr] gap-4">
-
-        {/* LEFT: Progress + Food log */}
-        <div className="space-y-4">
-
-          {/* Progress bars */}
-          <motion.section
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5"
-          >
-            <p className="text-[10px] uppercase tracking-[0.3em] text-white/25 mb-4">Progreso del día</p>
-
-            {/* Big kcal bar */}
-            <div className="mb-5">
-              <div className="flex items-end justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Flame size={16} className="text-orange-400" />
-                  <span className="text-sm font-semibold text-white/80">Calorías</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-2xl font-bold text-white/90">{Math.round(totals.kcal)}</span>
-                  <span className="text-sm text-white/30"> / {target.kcal} kcal</span>
-                </div>
-              </div>
-              <div className="h-3 rounded-full bg-white/6 overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${kcalPct}%` }}
-                  transition={{ duration: 0.7, ease: 'easeOut' }}
-                  className={`h-full rounded-full ${kcalPct >= 100 ? 'bg-rose-500' : 'bg-linear-to-r from-orange-500 to-amber-400'}`}
-                />
-              </div>
-              <div className="flex justify-between text-[10px] text-white/25 mt-1.5">
-                <span>{kcalPct >= 100 ? '⚠️ Objetivo superado' : `${kcalPct}% completado`}</span>
-                <span>{Math.max(0, target.kcal - Math.round(totals.kcal))} kcal restantes</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <MacroBar label="Proteína"       value={Math.round(totals.protein)} target={target.protein} color="bg-blue-500" />
-              <MacroBar label="Carbohidratos"  value={Math.round(totals.carbs)}   target={target.carbs}   color="bg-amber-500" />
-              <MacroBar label="Grasas"         value={Math.round(totals.fat)}     target={target.fat}     color="bg-rose-500" />
-            </div>
-          </motion.section>
-
-          {/* Food log */}
-          <motion.section
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">Alimentos de hoy</p>
-                <h2 className="text-lg font-semibold text-white/90 mt-1">Registro diario</h2>
-              </div>
-              {entries.length > 0 && (
-                <span className="text-xs text-white/40">{entries.length} entradas</span>
-              )}
-            </div>
-
-            {loading ? (
-              <div className="flex justify-center py-10">
-                <div className="w-5 h-5 rounded-full border-2 border-white/20 border-t-blue-400 animate-spin" />
-              </div>
-            ) : entries.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-white/8 p-8 text-center text-sm text-white/35">
-                Aún no has registrado nada hoy.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {entries.map((entry) => (
-                  <motion.div
-                    key={entry.id}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="flex items-center gap-3 p-3 rounded-2xl bg-white/3 border border-white/5 group"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white/80 font-medium truncate">{entry.name}</p>
-                      <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                        <span className="text-xs font-semibold text-orange-400">{entry.kcal} kcal</span>
-                        <span className="text-[11px] text-white/30">
-                          P {entry.protein}g · C {entry.carbs}g · G {entry.fat}g
-                        </span>
-                      </div>
-                    </div>
-                    <span className="text-xs text-white/25 shrink-0">
-                      {entry.createdAt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    <button
-                      onClick={() => deleteNutritionEntry(entry.id)}
-                      className="opacity-100 md:opacity-0 md:group-hover:opacity-100 w-7 h-7 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center transition shrink-0"
-                    >
-                      <Trash2 size={13} className="text-red-400" />
-                    </button>
-                  </motion.div>
-                ))}
-
-                {/* Totals row */}
-                <div className="mt-3 pt-3 border-t border-white/6 grid grid-cols-4 gap-2">
-                  {[
-                    { label: 'Kcal',      value: Math.round(totals.kcal),    color: 'text-orange-400' },
-                    { label: 'Proteína',  value: `${Math.round(totals.protein)}g`, color: 'text-blue-400' },
-                    { label: 'Carbos',    value: `${Math.round(totals.carbs)}g`,   color: 'text-amber-400' },
-                    { label: 'Grasas',    value: `${Math.round(totals.fat)}g`,     color: 'text-rose-400' },
-                  ].map((m) => (
-                    <div key={m.label} className="rounded-2xl bg-white/4 p-3 text-center">
-                      <p className={`text-base font-bold ${m.color}`}>{m.value}</p>
-                      <p className="text-[10px] text-white/30 mt-0.5">{m.label}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </motion.section>
-        </div>
-
-        {/* RIGHT: Search + Add food */}
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.12 }}
-          className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5 h-fit"
-        >
-          <div className="mb-5 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-              <Flame size={18} className="text-emerald-300" />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">Añadir alimento</p>
-              <h2 className="text-lg font-semibold text-white/90 mt-1">Buscar y registrar</h2>
-            </div>
-          </div>
-
-          {/* Botón foto al plato */}
-          <button
-            onClick={() => setShowPhotoModal(true)}
-            className="w-full mb-4 flex items-center justify-center gap-2 rounded-2xl border border-violet-500/20 bg-violet-500/8 px-4 py-3 text-sm font-medium text-violet-300 hover:bg-violet-500/14 transition"
-          >
-            <Camera size={15} />
-            📷 Analizar plato con IA
+      {/* Day type pills */}
+      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}
+        className="flex gap-1.5 mb-4 flex-wrap">
+        {DAY_TYPE_OPTIONS.map(opt => (
+          <button key={opt.value} onClick={() => handleDayTypeChange(opt.value)}
+            className={`rounded-xl px-3 py-1.5 text-xs font-medium transition ${dayType === opt.value ? 'bg-blue-500/20 border border-blue-500/40 text-blue-300' : 'bg-white/4 border border-white/8 text-white/50 hover:border-white/14'}`}>
+            {opt.emoji} {opt.label}
           </button>
+        ))}
+        <span className="ml-auto text-[11px] text-white/25 self-center">{target.kcal} kcal objetivo</span>
+      </motion.div>
 
-          {/* Search input */}
-          <div className="relative" ref={searchRef}>
-            <div className="relative">
-              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-              <input
-                value={searchQuery}
-                onChange={(e) => handleSearchInput(e.target.value)}
-                onFocus={() => hasSearched && setShowDropdown(true)}
-                placeholder="Busca un alimento (arroz, pollo, leche…)"
-                className="w-full pl-10 pr-10 py-3 rounded-2xl bg-white/4 border border-white/8 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-blue-500/40 transition-colors"
-              />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                {searching && <Loader2 size={14} className="text-white/30 animate-spin" />}
-                {searchQuery && !searching && (
-                  <button onClick={clearSelection} className="text-white/25 hover:text-white/50 transition">
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Dropdown */}
-            <AnimatePresence>
-              {showDropdown && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute z-20 w-full mt-1.5 rounded-2xl bg-[#13131b] border border-white/10 overflow-hidden shadow-2xl"
-                >
-                  {searchResults.length > 0 ? (
-                    <div className="max-h-64 overflow-y-auto">
-                      {searchResults.map((food) => (
-                        <button
-                          key={food.id}
-                          onMouseDown={() => selectFood(food)}
-                          className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition text-left border-b border-white/5 last:border-0"
-                        >
-                          <div className="flex-1 min-w-0 mr-3">
-                            <p className="text-sm text-white/85 font-medium truncate">{food.name}</p>
-                            {food.brand && (
-                              <p className="text-xs text-white/35 truncate">{food.brand}</p>
-                            )}
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="text-xs font-semibold text-orange-400">{food.per100g.kcal} kcal</p>
-                            <p className="text-[10px] text-white/30">/100g</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="px-4 py-5 text-center">
-                      <p className="text-sm text-white/40 mb-3">Sin resultados en Open Food Facts</p>
-                      {aiError ? (
-                        <p className="text-xs text-rose-400 px-2">{aiError}</p>
-                      ) : (
-                        <button
-                          onMouseDown={handleAISearch}
-                          disabled={aiLoading}
-                          className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:opacity-50"
-                        >
-                          {aiLoading ? (
-                            <Loader2 size={14} className="animate-spin" />
-                          ) : (
-                            <Bot size={14} />
-                          )}
-                          {aiLoading ? 'Consultando IA…' : 'Buscar con IA'}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
+      {/* Progress */}
+      <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}
+        className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5 mb-4">
+        <div className="flex items-end justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Flame size={15} className="text-orange-400" />
+            <span className="text-sm font-semibold text-white/80">Calorías</span>
           </div>
+          <div>
+            <span className="text-2xl font-bold text-white/90">{Math.round(totals.kcal)}</span>
+            <span className="text-sm text-white/30"> / {target.kcal} kcal</span>
+          </div>
+        </div>
+        <div className="h-2.5 rounded-full bg-white/6 overflow-hidden mb-4">
+          <motion.div initial={{ width: 0 }} animate={{ width: `${kcalPct}%` }} transition={{ duration: 0.7 }}
+            className={`h-full rounded-full ${kcalPct >= 100 ? 'bg-rose-500' : 'bg-linear-to-r from-orange-500 to-amber-400'}`} />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <MacroBar label="Proteína" value={Math.round(totals.protein)} target={target.protein} color="bg-blue-500" />
+          <MacroBar label="Carbos"   value={Math.round(totals.carbs)}   target={target.carbs}   color="bg-amber-500" />
+          <MacroBar label="Grasas"   value={Math.round(totals.fat)}     target={target.fat}     color="bg-rose-500" />
+        </div>
+      </motion.section>
 
-          {/* AI loading state outside dropdown */}
-          {aiLoading && (
-            <div className="mt-3 flex items-center gap-2 text-sm text-white/40">
-              <Loader2 size={14} className="animate-spin" />
-              Consultando Gemini…
-            </div>
+      {/* Search bar */}
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
+        className="relative mb-4">
+        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+        <input
+          ref={searchInputRef}
+          value={searchQuery}
+          onChange={(e) => handleSearchInput(e.target.value)}
+          placeholder="Buscar o añadir alimento..."
+          className="w-full pl-10 pr-10 py-3 rounded-2xl bg-[#1E1E28] border border-white/8 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-blue-500/40 transition-colors"
+        />
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          {searching && <Loader2 size={14} className="text-white/30 animate-spin" />}
+          {searchQuery && !searching && (
+            <button onClick={() => { setSearchQuery(''); setOffResults([]) }} className="text-white/25 hover:text-white/50 transition">
+              <X size={14} />
+            </button>
           )}
+        </div>
+      </motion.div>
 
-          {/* Selected food panel */}
-          <AnimatePresence>
-            {selectedFood && (
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 6 }}
-                className="mt-4 rounded-2xl border border-white/8 bg-white/3 p-4"
-              >
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white/90 truncate">{selectedFood.name}</p>
-                    {selectedFood.brand && (
-                      <p className="text-xs text-white/35 mt-0.5">{selectedFood.brand}</p>
-                    )}
-                    <p className="text-[10px] text-white/30 mt-1">
-                      Por 100g: {selectedFood.per100g.kcal} kcal · P {selectedFood.per100g.protein}g · C {selectedFood.per100g.carbs}g · G {selectedFood.per100g.fat}g
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <input
-                      value={grams}
-                      onChange={(e) => setGrams(e.target.value)}
-                      type="number"
-                      min="1"
-                      inputMode="numeric"
-                      className="w-16 rounded-xl bg-white/8 border border-white/10 px-2 py-2 text-sm text-white/85 text-center focus:outline-none focus:border-blue-500/40"
-                    />
-                    <span className="text-xs text-white/40">g</span>
-                  </div>
-                </div>
+      {/* Favorites or search results */}
+      <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+        className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5 mb-4">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-white/25 mb-4">
+          {isSearching ? 'Resultados' : '⚡ Acceso rápido'}
+        </p>
 
-                {computedMacros && (
-                  <div className="grid grid-cols-4 gap-2 mb-4">
-                    {[
-                      { label: 'Kcal',  value: computedMacros.kcal,             color: 'text-orange-400' },
-                      { label: 'Prot',  value: `${computedMacros.protein}g`,     color: 'text-blue-400' },
-                      { label: 'Carb',  value: `${computedMacros.carbs}g`,       color: 'text-amber-400' },
-                      { label: 'Gras',  value: `${computedMacros.fat}g`,         color: 'text-rose-400' },
-                    ].map((m) => (
-                      <div key={m.label} className="rounded-xl bg-white/5 py-2.5 text-center">
-                        <p className={`text-sm font-bold ${m.color}`}>{m.value}</p>
-                        <p className="text-[10px] text-white/30 mt-0.5">{m.label}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <button
-                  onClick={handleAdd}
-                  disabled={!computedMacros || Number(grams) <= 0}
-                  className="w-full rounded-2xl bg-emerald-600 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  + Añadir al registro
-                </button>
-              </motion.div>
+        {isSearching ? (
+          /* Search results */
+          <div className="space-y-2">
+            {filteredFavs.length === 0 && offResults.length === 0 && !searching && (
+              <p className="text-sm text-white/30 text-center py-6">Sin resultados para "{searchQuery}"</p>
             )}
-          </AnimatePresence>
+            {filteredFavs.map(fav => {
+              const servKcal = Math.round(fav.per100g.kcal * fav.defaultGrams / 100)
+              return (
+                <button key={fav.id} onClick={() => openFavorite(fav)}
+                  className="w-full flex items-center gap-3 p-3 rounded-2xl bg-amber-500/6 border border-amber-500/15 hover:bg-amber-500/10 transition text-left">
+                  <FoodThumb emoji={fav.emoji} imageUrl={fav.imageUrl} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white/85 truncate">{fav.name}</p>
+                    <p className="text-[11px] text-white/35">{fav.defaultGrams}g · P {Math.round(fav.per100g.protein * fav.defaultGrams / 100)}g</p>
+                  </div>
+                  <span className="text-sm font-semibold text-orange-400 shrink-0">{servKcal} kcal</span>
+                </button>
+              )
+            })}
+            {offResults.map(r => (
+              <button key={r.id} onClick={() => openFoodResult(r)}
+                className="w-full flex items-center gap-3 p-3 rounded-2xl bg-white/3 border border-white/6 hover:bg-white/6 transition text-left">
+                <FoodThumb emoji="🍽️" imageUrl={r.imageUrl} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white/85 truncate">{r.name}</p>
+                  <p className="text-[11px] text-white/35">{r.brand ? `${r.brand} · ` : ''}por 100g</p>
+                </div>
+                <span className="text-sm font-semibold text-orange-400 shrink-0">{r.per100g.kcal} kcal</span>
+              </button>
+            ))}
+            {searching && (
+              <div className="flex items-center justify-center gap-2 py-4 text-white/30 text-sm">
+                <Loader2 size={14} className="animate-spin" />
+                Buscando en Open Food Facts…
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Favorites grid */
+          favorites.length === 0 ? (
+            <div className="text-center py-8 text-sm text-white/30">Cargando favoritos…</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {favorites.map(fav => {
+                const servKcal = Math.round(fav.per100g.kcal * fav.defaultGrams / 100)
+                const servP    = Math.round(fav.per100g.protein * fav.defaultGrams / 100 * 10) / 10
+                const servC    = Math.round(fav.per100g.carbs   * fav.defaultGrams / 100 * 10) / 10
+                const servF    = Math.round(fav.per100g.fat     * fav.defaultGrams / 100 * 10) / 10
+                return (
+                  <div key={fav.id} className="relative group">
+                    <button onClick={() => openFavorite(fav)}
+                      className="w-full rounded-2xl bg-white/4 border border-white/6 p-3 text-left hover:bg-white/7 hover:border-white/12 transition-all active:scale-95">
+                      <div className="flex items-start justify-between mb-2">
+                        <FoodThumb emoji={fav.emoji} imageUrl={fav.imageUrl} />
+                        <span className="text-lg font-bold text-orange-400 leading-tight">{servKcal}</span>
+                      </div>
+                      <p className="text-xs font-medium text-white/80 leading-snug line-clamp-2 mb-1">{fav.name}</p>
+                      <p className="text-[10px] text-white/30">P{servP}·C{servC}·G{servF}</p>
+                    </button>
+                    <button
+                      onClick={async (e) => { e.stopPropagation(); await removeFavorite(fav.id); reloadFavorites() }}
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition w-6 h-6 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 flex items-center justify-center"
+                    >
+                      <X size={11} className="text-rose-400" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        )}
+      </motion.section>
 
-          {/* Tip */}
-          {!selectedFood && !searching && !searchQuery && (
-            <p className="mt-4 text-xs text-white/20 text-center">
-              Escribe el nombre de un alimento para buscarlo en Open Food Facts.<br />
-              Si no aparece, la IA puede calcular los macros.
-            </p>
-          )}
-        </motion.section>
-      </div>
+      {/* Food log grouped by meal */}
+      <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.13 }}
+        className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">Registro de hoy</p>
+          {entries.length > 0 && <span className="text-xs text-white/30">{entries.length} entradas</span>}
+        </div>
 
-      {/* Photo modal */}
+        {loading ? (
+          <div className="flex justify-center py-8"><div className="w-5 h-5 rounded-full border-2 border-white/20 border-t-blue-400 animate-spin" /></div>
+        ) : entries.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-white/8 p-8 text-center text-sm text-white/30">
+            Toca un favorito o busca un alimento para registrarlo.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {MEALS.map(mealCfg => {
+              const mealEntries = entriesByMeal[mealCfg.value]
+              if (mealEntries.length === 0) return null
+              const mealKcal = Math.round(mealEntries.reduce((s, e) => s + e.kcal, 0))
+              const isExpanded = expandedMeals.has(mealCfg.value)
+              return (
+                <div key={mealCfg.value} className="rounded-2xl border border-white/6 overflow-hidden">
+                  <button
+                    onClick={() => toggleMeal(mealCfg.value)}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/3 transition text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{mealCfg.emoji}</span>
+                      <span className="text-sm font-semibold text-white/80">{mealCfg.label}</span>
+                      <span className="text-xs text-white/35">({mealEntries.length})</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-orange-400">{mealKcal} kcal</span>
+                      {isExpanded ? <ChevronDown size={14} className="text-white/30" /> : <ChevronRight size={14} className="text-white/30" />}
+                    </div>
+                  </button>
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="px-3 pb-3 space-y-1.5 border-t border-white/5 pt-2">
+                          {mealEntries.map(entry => (
+                            <motion.div key={entry.id}
+                              initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
+                              className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/3 group">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-white/80 font-medium truncate">{entry.name}</p>
+                                <p className="text-[11px] text-white/30 mt-0.5">
+                                  P {entry.protein}g · C {entry.carbs}g · G {entry.fat}g
+                                </p>
+                              </div>
+                              <span className="text-xs font-semibold text-orange-400 shrink-0">{entry.kcal} kcal</span>
+                              <button onClick={() => deleteNutritionEntry(entry.id)}
+                                className="opacity-100 md:opacity-0 md:group-hover:opacity-100 w-7 h-7 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center transition shrink-0">
+                                <Trash2 size={12} className="text-red-400" />
+                              </button>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </motion.section>
+
+      {/* FAB — foto al plato */}
+      <motion.button
+        initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.3, type: 'spring' }}
+        onClick={() => setShowPhotoModal(true)}
+        className="fixed bottom-24 lg:bottom-8 right-4 lg:right-8 w-14 h-14 rounded-full bg-blue-600 shadow-lg shadow-blue-900/40 flex items-center justify-center hover:bg-blue-500 active:scale-95 transition z-30"
+        title="Analizar plato con IA"
+      >
+        <Camera size={22} className="text-white" />
+      </motion.button>
+
+      {/* Modals */}
       <AnimatePresence>
-        {showPhotoModal && <PhotoModal onClose={() => setShowPhotoModal(false)} />}
+        {confirmFood && (
+          <ConfirmModal
+            food={confirmFood}
+            onClose={() => setConfirmFood(null)}
+            onAdded={() => setConfirmFood(null)}
+            favorites={favorites}
+            onFavoritesChange={reloadFavorites}
+          />
+        )}
+        {showPhotoModal && (
+          <PhotoModal onClose={() => setShowPhotoModal(false)} onAddedMeal={getMealForTime()} />
+        )}
       </AnimatePresence>
     </div>
   )
