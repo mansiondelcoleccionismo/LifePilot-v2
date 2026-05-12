@@ -17,6 +17,7 @@ interface ExerciseDef {
   secondaryMuscles: string[]
   defaultSets: number
   defaultReps: number
+  repUnit?: string        // 'rep' (default) | 'seg' for time-based exercises
   initialWeight: number
   restSeconds: number
   instructions: string[]
@@ -37,6 +38,55 @@ interface HistoryEntry {
   date: string; day: string; totalSets: number; maxWeight: number; completedAt?: unknown
   exercises: { id: string; name: string; setsCompleted: number; weight: number }[]
 }
+
+// ─── Handgrip ─────────────────────────────────────────────────────────────────
+const HANDGRIP_EXERCISES: ExerciseDef[] = [
+  {
+    id: 'handgrip-dinamico', name: 'Apriete Dinámico',
+    primaryMuscles: ['Flexores dedos', 'Antebrazo'], secondaryMuscles: ['Muñeca'],
+    defaultSets: 3, defaultReps: 15, repUnit: 'rep', initialWeight: 8, restSeconds: 45,
+    instructions: [
+      'Sujeta el handgrip con agarre completo, todos los dedos en el mango',
+      'Aprieta durante 2 segundos hasta cerrar completamente',
+      'Suelta en 1 segundo de forma controlada — no dejes ir de golpe',
+      'Completa todas las reps con una mano antes de cambiar',
+      'El codo ligeramente flexionado, muñeca recta durante todo el movimiento',
+    ],
+    tip: '2 segundos apretando, 1 soltando. Este ritmo es lo que construye fuerza real. Si vas más rápido pierdes el estímulo.',
+    commonErrors: ['Soltar de golpe sin control', 'Muñeca doblada', 'Usar solo 3 dedos en vez de todos'],
+    progressionRule: '3×15 durante 2 semanas → sube 2kg',
+  },
+  {
+    id: 'handgrip-isometrico', name: 'Aguante Isométrico',
+    primaryMuscles: ['Agarre', 'Flexores dedos'], secondaryMuscles: ['Antebrazo'],
+    defaultSets: 2, defaultReps: 30, repUnit: 'seg', initialWeight: 8, restSeconds: 60,
+    instructions: [
+      'Aprieta el handgrip hasta la mitad del recorrido (no al máximo)',
+      'Mantén esa posición durante 30 segundos sin soltar',
+      'Respira normalmente — no aguantes la respiración',
+      'Si tiembla es normal, aguanta hasta el final',
+      'Cambia de mano y repite',
+    ],
+    tip: 'El isométrico construye la fuerza de agarre funcional que usas en padel. Más útil que las reps rápidas para el deporte.',
+    commonErrors: ['Apretar al máximo (se agota antes de tiempo)', 'Aguantar la respiración', 'Soltar antes de tiempo'],
+    progressionRule: '30s → 45s → 60s antes de subir peso',
+  },
+]
+
+const HANDGRIP_WEEK_WEIGHTS = [
+  { maxWeek: 2,  weight: 8  },
+  { maxWeek: 4,  weight: 10 },
+  { maxWeek: 6,  weight: 12 },
+  { maxWeek: 8,  weight: 15 },
+  { maxWeek: 10, weight: 18 },
+  { maxWeek: 99, weight: 20 },
+]
+
+function handgripWeightForWeek(week: number): number {
+  return HANDGRIP_WEEK_WEIGHTS.find(w => week <= w.maxWeek)?.weight ?? 20
+}
+
+function isHandgrip(id: string) { return id.startsWith('handgrip-') }
 
 // ─── Program ──────────────────────────────────────────────────────────────────
 const PROGRAM: DayProgram[] = [
@@ -90,7 +140,7 @@ const PROGRAM: DayProgram[] = [
     ],
   },
   {
-    day: 'Martes', shortLabel: 'Mar', type: 'workout', focus: 'Piernas',
+    day: 'Martes', shortLabel: 'Mar', type: 'workout', focus: 'Piernas + Handgrip',
     exercises: [
       {
         id: 'sentadilla-goblet', name: 'Sentadilla Goblet',
@@ -152,6 +202,7 @@ const PROGRAM: DayProgram[] = [
         commonErrors: ['No apretar los glúteos (solo se usa la espalda baja)', 'Hiperextender la espalda arriba'],
         progressionRule: '3×20 → añade mancuerna encima de las caderas → sube peso',
       },
+      ...HANDGRIP_EXERCISES,
     ],
   },
   {
@@ -219,7 +270,7 @@ const PROGRAM: DayProgram[] = [
     ],
   },
   {
-    day: 'Jueves', shortLabel: 'Jue', type: 'workout', focus: 'Piernas + Core',
+    day: 'Jueves', shortLabel: 'Jue', type: 'workout', focus: 'Piernas + Core + Handgrip',
     exercises: [
       {
         id: 'sentadilla-mancuernas', name: 'Sentadilla con Mancuernas',
@@ -280,10 +331,11 @@ const PROGRAM: DayProgram[] = [
         commonErrors: ['Cadera que sube al mover las piernas', 'Ir demasiado rápido perdiendo la posición'],
         progressionRule: '20 reps → 30 reps → 40 reps → con chaleco',
       },
+      ...HANDGRIP_EXERCISES,
     ],
   },
   { day: 'Viernes', shortLabel: 'Vie', type: 'rest', exercises: [] },
-  { day: 'Sábado', shortLabel: 'Sáb', type: 'rest', exercises: [] },
+  { day: 'Sábado', shortLabel: 'Sáb', type: 'workout', focus: 'Handgrip 💪', exercises: [...HANDGRIP_EXERCISES] },
   { day: 'Domingo', shortLabel: 'Dom', type: 'rest', exercises: [] },
 ]
 
@@ -429,6 +481,19 @@ async function loadHistory(): Promise<HistoryEntry[]> {
 async function persistHistory(entry: HistoryEntry) {
   try {
     await setDoc(doc(db, 'exercise_history', entry.date), { ...entry, completedAt: serverTimestamp() })
+  } catch { /* silencioso */ }
+}
+
+async function loadHandgripStartDate(): Promise<string | null> {
+  try {
+    const snap = await getDoc(doc(db, 'handgrip_config', 'meta'))
+    return snap.exists() ? (snap.data().startDate as string) : null
+  } catch { return null }
+}
+
+async function saveHandgripStartDate(date: string) {
+  try {
+    await setDoc(doc(db, 'handgrip_config', 'meta'), { startDate: date }, { merge: true })
   } catch { /* silencioso */ }
 }
 
@@ -616,7 +681,7 @@ function ExerciseCard({
           <p className="text-xs text-white/35 truncate">{exercise.primaryMuscles.join(' · ')}</p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <span className="rounded-xl bg-blue-500/10 px-2 py-1 text-xs text-blue-300">{numSets}×{numReps}</span>
+          <span className="rounded-xl bg-blue-500/10 px-2 py-1 text-xs text-blue-300">{numSets}×{numReps}{exercise.repUnit === 'seg' ? 's' : ''}</span>
           <span className="rounded-xl bg-amber-500/10 px-2 py-1 text-xs text-amber-300 font-medium">
             {weight > 0 ? `${weight}kg` : 'PC'}
           </span>
@@ -689,7 +754,7 @@ function ExerciseCard({
                       <input type="number" inputMode="numeric" placeholder={String(numReps)} value={s.reps}
                         onChange={(e) => handleRepChange(idx, e.target.value)}
                         className="w-14 rounded-lg bg-white/8 border border-white/8 px-2 py-1.5 text-xs text-white/80 text-center focus:outline-none focus:border-white/25" />
-                      <span className="text-xs text-white/25 shrink-0">rep</span>
+                      <span className="text-xs text-white/25 shrink-0">{exercise.repUnit ?? 'rep'}</span>
                       {exercise.initialWeight > 0 && (
                         <>
                           <input type="number" inputMode="decimal" placeholder={String(weight)} value={s.weight}
@@ -911,6 +976,18 @@ export function EjerciciosPage() {
   const [showDone, setShowDone] = useState(false)
   const [workoutAiMessage, setWorkoutAiMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  const [handgripWeek, setHandgripWeek] = useState(1)
+
+  // ── Carga semana handgrip ──
+  useEffect(() => {
+    loadHandgripStartDate().then(date => {
+      const start = date ?? todayStr()
+      if (!date) saveHandgripStartDate(start)
+      const msPerWeek = 7 * 24 * 60 * 60 * 1000
+      const weeks = Math.floor((Date.now() - new Date(start).getTime()) / msPerWeek)
+      setHandgripWeek(Math.max(1, weeks + 1))
+    })
+  }, [])
 
   // ── Carga de datos con manejo robusto de errores ──
   useEffect(() => {
@@ -1095,23 +1172,67 @@ export function EjerciciosPage() {
               <div className="flex justify-center py-14">
                 <div className="w-6 h-6 rounded-full border-2 border-white/20 border-t-blue-400 animate-spin" />
               </div>
-            ) : (
-              <div className="space-y-3">
-                {dayProgram.exercises.map((ex) => (
-                  <ExerciseCard
-                    key={ex.id}
-                    exercise={ex}
-                    config={configs[ex.id] ?? {}}
-                    sets={setsLog[ex.id] ?? []}
-                    weight={weights[ex.id] ?? ex.initialWeight}
-                    progressionAlert={progressionAlerts.has(ex.id)}
-                    onSetsChange={(s) => handleSetsChange(ex.id, s)}
-                    onWeightChange={(w) => handleWeightChange(ex.id, w)}
-                    onSetDone={handleSetDone}
-                  />
-                ))}
-              </div>
-            )
+            ) : (() => {
+              const regularExs  = dayProgram.exercises.filter(e => !isHandgrip(e.id))
+              const handgripExs = dayProgram.exercises.filter(e => isHandgrip(e.id))
+              const hasHandgrip = handgripExs.length > 0
+              const recWeight   = handgripWeightForWeek(handgripWeek)
+              return (
+                <div className="space-y-3">
+                  {/* Banner padel / handgrip */}
+                  {hasHandgrip && (
+                    <div className="rounded-2xl bg-emerald-500/8 border border-emerald-500/20 p-4 flex gap-3">
+                      <span className="text-xl shrink-0 mt-0.5">🎾</span>
+                      <div>
+                        <p className="text-sm text-white/75 leading-snug">El agarre fuerte mejora tu padel directamente — cada kg más de fuerza se nota en la pista</p>
+                        <p className="text-xs text-emerald-400 mt-1.5 font-medium">
+                          Semana {handgripWeek} del programa → <strong>{recWeight}kg recomendados</strong>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Ejercicios regulares */}
+                  {regularExs.map((ex) => (
+                    <ExerciseCard
+                      key={ex.id}
+                      exercise={ex}
+                      config={configs[ex.id] ?? {}}
+                      sets={setsLog[ex.id] ?? []}
+                      weight={weights[ex.id] ?? ex.initialWeight}
+                      progressionAlert={progressionAlerts.has(ex.id)}
+                      onSetsChange={(s) => handleSetsChange(ex.id, s)}
+                      onWeightChange={(w) => handleWeightChange(ex.id, w)}
+                      onSetDone={handleSetDone}
+                    />
+                  ))}
+
+                  {/* Separador + sección handgrip */}
+                  {hasHandgrip && (
+                    <>
+                      <div className="flex items-center gap-3 py-1">
+                        <div className="flex-1 h-px bg-white/8" />
+                        <span className="text-sm font-semibold text-white/50 px-1">💪 Handgrip</span>
+                        <div className="flex-1 h-px bg-white/8" />
+                      </div>
+                      {handgripExs.map((ex) => (
+                        <ExerciseCard
+                          key={ex.id}
+                          exercise={ex}
+                          config={configs[ex.id] ?? {}}
+                          sets={setsLog[ex.id] ?? []}
+                          weight={weights[ex.id] ?? recWeight}
+                          progressionAlert={progressionAlerts.has(ex.id)}
+                          onSetsChange={(s) => handleSetsChange(ex.id, s)}
+                          onWeightChange={(w) => handleWeightChange(ex.id, w)}
+                          onSetDone={handleSetDone}
+                        />
+                      ))}
+                    </>
+                  )}
+                </div>
+              )
+            })()
           )}
         </div>
       )}
