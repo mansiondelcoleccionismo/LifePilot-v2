@@ -21,13 +21,15 @@ const ACHIEVED_COL     = 'kira_achieved_milestones'
 
 // ── Legacy: planned activities CRUD ───────────────────────────────────────
 export function subscribeKiraActivities(callback: (activities: KiraActivity[]) => void) {
-  const q = query(collection(db, ACTIVITIES_COL), orderBy('date', 'asc'), orderBy('createdAt', 'asc'))
+  const q = query(collection(db, ACTIVITIES_COL), orderBy('createdAt', 'asc'))
   return onSnapshot(q, snapshot => {
-    callback(snapshot.docs.map(d => ({
+    const docs = snapshot.docs.map(d => ({
       id: d.id, ...d.data(),
       createdAt: d.data().createdAt?.toDate() || new Date(),
       updatedAt: d.data().updatedAt?.toDate() || new Date(),
-    })) as KiraActivity[])
+    })) as KiraActivity[]
+    // Sort by date in the client to avoid composite index requirement
+    callback(docs.sort((a, b) => a.date.localeCompare(b.date)))
   })
 }
 
@@ -47,13 +49,15 @@ export async function deleteKiraActivity(id: string) {
 
 // ── Legacy: milestones CRUD ────────────────────────────────────────────────
 export function subscribeKiraMilestones(callback: (milestones: KiraMilestone[]) => void) {
-  const q = query(collection(db, MILESTONES_COL), orderBy('date', 'desc'), orderBy('createdAt', 'desc'))
+  const q = query(collection(db, MILESTONES_COL), orderBy('createdAt', 'desc'))
   return onSnapshot(q, snapshot => {
-    callback(snapshot.docs.map(d => ({
+    const docs = snapshot.docs.map(d => ({
       id: d.id, ...d.data(),
       createdAt: d.data().createdAt?.toDate() || new Date(),
       updatedAt: d.data().updatedAt?.toDate() || new Date(),
-    })) as KiraMilestone[])
+    })) as KiraMilestone[]
+    // Sort by date desc in the client to avoid composite index requirement
+    callback(docs.sort((a, b) => b.date.localeCompare(a.date)))
   })
 }
 
