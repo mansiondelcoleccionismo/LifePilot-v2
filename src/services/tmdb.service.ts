@@ -15,6 +15,7 @@ export interface TmdbResult {
   synopsis?: string
   mediaType: 'pelicula' | 'serie' | 'anime'
   director?: string
+  cast?: string[]
   genres?: string[]
   duration?: number
   totalEpisodes?: number
@@ -106,8 +107,12 @@ export async function getContentDetails(tmdbId: number, type: 'movie' | 'tv'): P
 
   const trailer = videos.results.find(v => v.type === 'Trailer' && v.site === 'YouTube')
   const genres = (details.genres as Array<{ name: string }> | undefined)?.map(g => g.name) ?? []
-  const credits = details.credits as { crew?: Array<{ job: string; name: string }> } | undefined
+  const credits = details.credits as {
+    crew?: Array<{ job: string; name: string }>
+    cast?: Array<{ name: string }>
+  } | undefined
   const director = credits?.crew?.find(c => c.job === 'Director')?.name
+  const cast = credits?.cast?.slice(0, 5).map(c => c.name)
   const runtime = details.runtime as number | undefined
   const episodeRuntime = details.episode_run_time as number[] | undefined
 
@@ -120,6 +125,7 @@ export async function getContentDetails(tmdbId: number, type: 'movie' | 'tv'): P
     synopsis: details.overview as string | undefined,
     mediaType: type === 'tv' ? 'serie' : 'pelicula',
     director,
+    cast,
     genres,
     duration: runtime ?? episodeRuntime?.[0],
     totalEpisodes: type === 'tv' ? (details.number_of_episodes as number | undefined) : undefined,
