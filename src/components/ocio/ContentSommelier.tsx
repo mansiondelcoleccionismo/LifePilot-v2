@@ -16,6 +16,7 @@ interface SommelierRec {
   tituloOriginal: string
   tipo: string
   plataforma: string
+  canal: string        // YouTube channel name when plataforma === 'YouTube Gratis'
   duracion: number
   año: number
   razon: string
@@ -71,7 +72,7 @@ function platStyle(p: string): string {
   if (p === 'Netflix') return 'bg-red-500/20 text-red-300 border-red-500/30'
   if (p.includes('Amazon') || p.includes('Prime')) return 'bg-blue-400/20 text-blue-300 border-blue-400/30'
   if (p === 'HBO' || p.includes('Max')) return 'bg-purple-500/20 text-purple-300 border-purple-500/30'
-  if (p === 'YouTube') return 'bg-red-400/20 text-red-300 border-red-400/30'
+  if (p === 'YouTube' || p === 'YouTube Gratis') return 'bg-red-500/20 text-red-300 border-red-500/30'
   return 'bg-white/8 text-white/40 border-white/10'
 }
 
@@ -80,10 +81,25 @@ function normalizePlatform(p: string): Platform {
   if (VALID_PLATFORMS.has(p as Platform)) return p as Platform
   if (p.includes('Amazon') || p.includes('Prime')) return 'Amazon Prime'
   if (p.includes('HBO') || p.includes('Max')) return 'HBO'
+  if (p === 'YouTube Gratis') return 'YouTube'
   return 'Otro'
 }
 
-const jwUrl = (t: string) => `https://www.justwatch.com/es/buscar?q=${encodeURIComponent(t)}`
+const jwUrl  = (t: string) => `https://www.justwatch.com/es/buscar?q=${encodeURIComponent(t)}`
+const ytUrl  = (titulo: string, canal: string) =>
+  `https://www.youtube.com/results?search_query=${encodeURIComponent(canal ? `${titulo} ${canal}` : titulo)}`
+
+function watchUrl(rec: SommelierRec): string {
+  return rec.plataforma === 'YouTube Gratis' ? ytUrl(rec.titulo, rec.canal) : jwUrl(rec.titulo)
+}
+
+function YouTubeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-red-400 shrink-0" aria-hidden>
+      <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.7 15.5V8.5l6.3 3.5-6.3 3.5z"/>
+    </svg>
+  )
+}
 
 const SKIP_WORDS = new Set(['el', 'la', 'los', 'las', 'the', 'a', 'an', 'un', 'una', 'de', 'of'])
 function posterInitials(title: string): string {
@@ -325,9 +341,15 @@ function RecDetailModal({
 
             {/* Meta pills */}
             <div className="flex flex-wrap gap-1.5 mt-3 mb-4">
-              <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${platStyle(rec.plataforma)}`}>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-medium border flex items-center gap-1 ${platStyle(rec.plataforma)}`}>
+                {rec.plataforma === 'YouTube Gratis' && <YouTubeIcon />}
                 {rec.plataforma}
               </span>
+              {rec.canal && (
+                <span className="px-2.5 py-1 rounded-full text-xs bg-white/6 text-white/40 border border-white/8">
+                  📺 {rec.canal}
+                </span>
+              )}
               {rec.año > 0 && (
                 <span className="px-2.5 py-1 rounded-full text-xs bg-white/8 text-white/50 border border-white/10">
                   {rec.año}
@@ -412,13 +434,16 @@ function RecDetailModal({
             {/* Action buttons */}
             <div className="space-y-2 pt-1">
               <a
-                href={jwUrl(rec.titulo)}
+                href={watchUrl(rec)}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={onStart}
                 className="flex items-center justify-center gap-2 w-full rounded-2xl bg-violet-600 hover:bg-violet-500 py-3.5 text-sm font-semibold text-white transition"
               >
-                ▶ Ver esta
+                {rec.plataforma === 'YouTube Gratis'
+                  ? <><YouTubeIcon /> Buscar en YouTube</>
+                  : '▶ Ver esta'
+                }
               </a>
               <button
                 onClick={onSave}
@@ -493,22 +518,26 @@ function RecCard({ rec, index, onOpen, onStart, onSave }: {
           )}
         </div>
         <div className="flex flex-wrap gap-1">
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${platStyle(rec.plataforma)}`}>
-            {rec.plataforma}
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border flex items-center gap-1 ${platStyle(rec.plataforma)}`}>
+            {rec.plataforma === 'YouTube Gratis' && <YouTubeIcon />}
+            {rec.plataforma === 'YouTube Gratis' ? 'YouTube Gratis' : rec.plataforma}
           </span>
           {dur && <span className="px-2 py-0.5 rounded-full text-[10px] bg-white/6 text-white/40 border border-white/8">{dur}</span>}
           {rec.año > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] bg-white/6 text-white/40 border border-white/8">{rec.año}</span>}
         </div>
+        {rec.canal && (
+          <p className="text-[10px] text-white/35 truncate">📺 {rec.canal}</p>
+        )}
         <p className="text-[11px] text-white/55 leading-snug line-clamp-2 italic">{rec.razon}</p>
         <div className="flex gap-2 mt-auto pt-0.5">
           <a
-            href={jwUrl(rec.titulo)}
+            href={watchUrl(rec)}
             target="_blank"
             rel="noopener noreferrer"
             onClick={e => { e.stopPropagation(); onStart() }}
             className="flex-1 rounded-xl bg-violet-600 hover:bg-violet-500 px-2 py-1.5 text-[11px] font-semibold text-white text-center transition"
           >
-            ▶ Ver esta
+            {rec.plataforma === 'YouTube Gratis' ? '▶ Buscar en YouTube' : '▶ Ver esta'}
           </a>
           <button
             onClick={e => { e.stopPropagation(); onSave() }}
@@ -623,13 +652,25 @@ Tono: amigo cinéfilo cercano. Sin formato, sin asteriscos, solo texto.`
 
       const prompt = `Eres el sommelier de cine personal de Daniel. Responde SOLO con el JSON, sin ningún texto antes ni después, sin bloques de código markdown.
 
-Perfil: thrillers, documental histórico (España s.XX, guerra civil, franquismo), anime de culto, cine de autor, true crime, geopolítica. Plataformas: Netflix y Amazon Prime. Evita: romance, comedia romántica, superhéroes Marvel.${dismissedStr}
+Perfil: thrillers, documental histórico (España s.XX, guerra civil, franquismo), anime de culto, cine de autor, true crime, geopolítica. Plataformas principales: Netflix y Amazon Prime. Evita: romance, comedia romántica, superhéroes Marvel.${dismissedStr}
 Historial: ${lastStr}
 Petición: "${text}"
 Contexto: ${hour}h, mood ${todayMood ?? '?'}/5
 
+CANALES DE YOUTUBE DE DOCUMENTALES (usar cuando pida documentales de YouTube o gratis):
+- "DW Documental": documentales internacionales serios en español
+- "RTVE Play": España S.XX, guerra civil, transición, franquismo — PRIORIZAR si pide historia española
+- "Documentales Completos en Español": variado
+- "Al Jazeera Español": geopolítica, conflictos internacionales
+- "Euronews en español": actualidad internacional
+- "La 2 Documentales": cultura y sociedad española
+- "Historia de España RTVE": específico historia española
+- "Malbert Investiga": conspiraciones y misterios históricos
+- "RawRoger": misterios, casos reales, sucesos extraños
+Cuando recomiendes un canal de YouTube: pon plataforma="YouTube Gratis", canal=nombre exacto del canal, título exacto del documental para buscarlo.
+
 Devuelve exactamente este JSON con 3 recomendaciones reales y disponibles:
-{"intro":"Una frase tuya de máximo 10 palabras presentando las opciones","recs":[{"titulo":"título exacto","tituloOriginal":"título original","tipo":"pelicula|serie|documental|anime","plataforma":"Netflix|Amazon Prime|Buscar en JustWatch","duracion":90,"año":2020,"razon":"por qué encaja, máx 10 palabras"},{"titulo":"...","tituloOriginal":"...","tipo":"...","plataforma":"...","duracion":0,"año":0,"razon":"..."},{"titulo":"...","tituloOriginal":"...","tipo":"...","plataforma":"...","duracion":0,"año":0,"razon":"..."}]}`
+{"intro":"Una frase tuya de máximo 10 palabras presentando las opciones","recs":[{"titulo":"título exacto","tituloOriginal":"título original","tipo":"pelicula|serie|documental|anime","plataforma":"Netflix|Amazon Prime|YouTube Gratis|Buscar en JustWatch","canal":"nombre del canal si YouTube Gratis, vacío si no","duracion":90,"año":2020,"razon":"por qué encaja, máx 10 palabras"},{"titulo":"...","tituloOriginal":"...","tipo":"...","plataforma":"...","canal":"","duracion":0,"año":0,"razon":"..."},{"titulo":"...","tituloOriginal":"...","tipo":"...","plataforma":"...","canal":"","duracion":0,"año":0,"razon":"..."}]}`
 
       const raw    = await callAI(prompt, undefined, true, 2500)
       const parsed = extractJson<{ intro: string; recs: SommelierRec[] }>(raw)
