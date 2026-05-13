@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { User, Key, Apple, Palette, Database, Save, Download, Loader2, Bell, Activity, Eye, EyeOff, Film } from 'lucide-react'
+import { User, Key, Apple, Palette, Database, Save, Download, Loader2, Bell, Activity, Eye, EyeOff, Film, LogOut, RefreshCw } from 'lucide-react'
+import { useAuthStore } from '@/store/auth.store'
+import { useGoogleAuth } from '@/hooks/useGoogleAuth'
 import { DAY_TARGETS, type DayType, type MacroTarget } from '@/types/nutrition'
 import { getActiveKeyInfo, testGeminiKey, testGroqKey, clearCooldowns } from '@/services/ai.service'
 import {
@@ -294,6 +296,9 @@ export function AjustesPage() {
     setCustomMacros({ ...DAY_TARGETS })
   }
 
+  const { user, logout } = useAuthStore()
+  const { loginWithGoogle } = useGoogleAuth()
+
   return (
     <div className="px-4 py-6 md:px-6 lg:px-8 max-w-4xl mx-auto">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
@@ -311,6 +316,59 @@ export function AjustesPage() {
       </motion.div>
 
       <div className="space-y-6">
+        {/* Cuenta Google */}
+        <section className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center">
+              <User size={20} className="text-blue-300" />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">Cuenta</p>
+              <h2 className="text-lg font-semibold text-white/90 mt-1">Google</h2>
+            </div>
+          </div>
+
+          {user ? (
+            <div className="flex items-center gap-4">
+              <img src={user.picture} alt={user.name} className="w-14 h-14 rounded-2xl object-cover ring-2 ring-white/10" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-white/90 truncate">{user.name}</p>
+                <p className="text-sm text-white/40 truncate">{user.email}</p>
+                <p className="text-xs text-emerald-400/70 mt-1">● Conectado · Calendar y Tasks activos</p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => loginWithGoogle()}
+                  className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition px-3 py-1.5 rounded-xl bg-white/5 border border-white/8"
+                >
+                  <RefreshCw size={11} /> Reconectar
+                </button>
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-1.5 text-xs text-rose-400 hover:text-rose-300 transition px-3 py-1.5 rounded-xl bg-rose-500/6 border border-rose-500/15"
+                >
+                  <LogOut size={11} /> Cerrar sesión
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/8 flex items-center justify-center">
+                <User size={20} className="text-white/25" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm text-white/50">No conectado</p>
+                <p className="text-xs text-white/30 mt-0.5">Inicia sesión para sincronizar calendario y tareas</p>
+              </div>
+              <button
+                onClick={() => loginWithGoogle()}
+                className="text-sm font-medium text-blue-400 hover:text-blue-300 transition px-4 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20"
+              >
+                Conectar
+              </button>
+            </div>
+          )}
+        </section>
         {/* Perfil metabólico */}
         <section className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5">
           <div className="mb-5 flex items-center gap-3">

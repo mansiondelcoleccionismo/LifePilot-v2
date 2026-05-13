@@ -8,6 +8,8 @@ import { subscribeNutritionEntries } from '@/services/nutrition.service'
 import { subscribeCalendarEvents } from '@/services/calendar.service'
 import { subscribeDiaryEntries } from '@/services/diary.service'
 import { subscribeAssets, calculateTotal } from '@/services/wealth.service'
+import { getTodayEvents, type GCalEvent } from '@/services/google-calendar.service'
+import { useAuthStore } from '@/store/auth.store'
 import { MedicationWidget } from '@/components/MedicationWidget'
 import { WeeklyReport } from '@/components/WeeklyReport'
 import { useWeights } from '@/features/health/useWeights'
@@ -119,8 +121,10 @@ export function InicioPage() {
   const { today, greeting } = useToday()
   const navigate = useNavigate()
   const { loadWeights, lastWeight, delta } = useWeights()
+  const { isLoggedIn } = useAuthStore()
   const [nutritionEntries, setNutritionEntries] = useState<FoodEntry[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [gCalEvents, setGCalEvents] = useState<GCalEvent[]>([])
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([])
   const [assets, setAssets] = useState<Asset[]>([])
   const [loading, setLoading] = useState(true)
@@ -190,6 +194,13 @@ export function InicioPage() {
     getWeatherToday().then(setWeather)
     return () => { unsubNutrition(); unsubEvents(); unsubDiary() }
   }, [currentMonthKey])
+
+  useEffect(() => {
+    if (!isLoggedIn) return
+    getTodayEvents().then(setGCalEvents).catch(() => {})
+    const id = setInterval(() => getTodayEvents().then(setGCalEvents).catch(() => {}), 5 * 60_000)
+    return () => clearInterval(id)
+  }, [isLoggedIn])
 
   async function fetchBriefing() {
     if (!hasAnyAIKey()) return
@@ -515,10 +526,25 @@ Responde SOLO con este JSON sin texto adicional ni markdown:
         <Card className="md:col-span-2">
           <div className="flex items-center gap-2 mb-3">
             <Calendar size={14} className="text-cyan-400" />
-            <Label>Próximos eventos · Hoy</Label>
+            <Label>Agenda de hoy</Label>
           </div>
           <div className="space-y-2">
-            {todayEvents.length > 0 ? todayEvents.map((event) => (
+            {/* Google Calendar events */}
+            {gCalEvents.map((ev) => {
+              const time = ev.allDay ? '' : new Date(ev.start).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+              return (
+                <div key={ev.id} className="flex items-center gap-3 p-2 rounded-lg bg-blue-500/4 border border-blue-500/10">
+                  <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white/80 truncate">{ev.title}</p>
+                    {time && <p className="text-xs text-white/40">{time}</p>}
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/12 text-blue-400/60 border border-blue-500/15 shrink-0">GCal</span>
+                </div>
+              )
+            })}
+            {/* Local events */}
+            {todayEvents.map((event) => (
               <div key={event.id} className="flex items-center gap-3 p-2 rounded-lg bg-white/2 border border-white/4">
                 <div className={`w-2 h-2 rounded-full shrink-0 ${
                   event.category === 'trabajo'  ? 'bg-blue-400'   :
@@ -531,8 +557,9 @@ Responde SOLO con este JSON sin texto adicional ni markdown:
                   {event.time && <p className="text-xs text-white/40">{event.time}</p>}
                 </div>
               </div>
-            )) : (
-              <p className="text-sm text-white/30">No hay eventos programados para hoy</p>
+            ))}
+            {gCalEvents.length === 0 && todayEvents.length === 0 && (
+              <p className="text-sm text-white/30">Sin eventos programados para hoy</p>
             )}
           </div>
         </Card>

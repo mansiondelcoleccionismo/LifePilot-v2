@@ -10,7 +10,7 @@ import { ALL_NAV_ITEMS } from '@/lib/navigation'
 import { useTasks } from '@/hooks/useTasks'
 import { useTheme } from '@/hooks/useTheme'
 import { useNotificationsStore } from '@/store/notificationsStore'
-import { useUserStore } from '@/store/userStore'
+import { useAuthStore } from '@/store/auth.store'
 import type { NotificationType } from '@/types/notification'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -62,12 +62,16 @@ export function Topbar() {
   const { pending } = useTasks()
   const { isDark, toggle } = useTheme()
   const { notifications, markAsRead, markAllAsRead } = useNotificationsStore()
-  const { name, email, avatarUrl } = useUserStore()
+  const { user, logout } = useAuthStore()
 
   const [notifOpen, setNotifOpen]     = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const notifRef   = useRef<HTMLDivElement>(null)
   const profileRef = useRef<HTMLDivElement>(null)
+
+  const name      = user?.name    ?? 'Usuario'
+  const email     = user?.email   ?? ''
+  const avatarUrl = user?.picture ?? null
 
   const unreadCount = notifications.filter((n) => !n.read).length
   const initial     = name ? name.charAt(0).toUpperCase() : 'U'
@@ -279,7 +283,7 @@ export function Topbar() {
                 {/* Divider + logout */}
                 <div className="border-t border-white/6 py-1.5">
                   <button
-                    onClick={() => setProfileOpen(false)}
+                    onClick={() => { logout(); setProfileOpen(false) }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-400 hover:text-rose-300 hover:bg-rose-500/6 transition"
                   >
                     <LogOut size={15} />

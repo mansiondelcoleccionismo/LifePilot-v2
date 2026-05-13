@@ -1,5 +1,7 @@
 import { HashRouter, Routes, Route } from 'react-router-dom'
 import { AppShell } from '@/layouts/AppShell'
+import { LoginPage } from '@/pages/LoginPage'
+import { useAuthStore } from '@/store/auth.store'
 import { InicioPage } from '@/pages/InicioPage'
 import { NutricionPage } from '@/pages/NutricionPage'
 import { EjerciciosPage } from '@/pages/EjerciciosPage'
@@ -18,6 +20,10 @@ import { PerfilPage } from '@/pages/PerfilPage'
 import { SaludPesoPage } from '@/pages/SaludPesoPage'
 
 export default function App() {
+  const { isLoggedIn } = useAuthStore()
+
+  if (!isLoggedIn) return <LoginPage />
+
   return (
     <HashRouter>
       <Routes>

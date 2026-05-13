@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m ' *)",
+      "Bash(cat src/store/userStore.ts)",
+      "Bash(cat src/store/userStore.tsx)",
+      "Bash(npm install *)"
+    ]
+  }
+}

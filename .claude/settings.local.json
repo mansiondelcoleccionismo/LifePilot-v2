@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(curl -s -X POST 'https://firestore.googleapis.com/v1/projects/lifepilot-v2/databases/\\(default\\)/documents/medications?key=AIzaSyAuix1gP3cT7vm9dNzXv8Mu2hXFmDKEzpc' -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(git push *)"
+    ]
+  }
+}
