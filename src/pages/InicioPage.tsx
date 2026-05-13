@@ -1,14 +1,14 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, CheckSquare, TrendingUp, Flame, Calendar, RefreshCw, Loader2 } from 'lucide-react'
+import { Sparkles, CheckSquare, TrendingUp, Flame, Calendar, RefreshCw, Loader2, AlertCircle } from 'lucide-react'
 import { useTasks } from '@/hooks/useTasks'
 import { useToday } from '@/hooks/useToday'
 import { subscribeNutritionEntries } from '@/services/nutrition.service'
 import { subscribeCalendarEvents } from '@/services/calendar.service'
 import { subscribeDiaryEntries } from '@/services/diary.service'
 import { subscribeAssets, calculateTotal } from '@/services/wealth.service'
-import { getTodayEvents, type GCalEvent } from '@/services/google-calendar.service'
+import { getTodayEvents, type GCalEvent, TokenExpiredError } from '@/services/google-calendar.service'
 import { useAuthStore } from '@/store/auth.store'
 import { MedicationWidget } from '@/components/MedicationWidget'
 import { WeeklyReport } from '@/components/WeeklyReport'
@@ -121,10 +121,11 @@ export function InicioPage() {
   const { today, greeting } = useToday()
   const navigate = useNavigate()
   const { loadWeights, lastWeight, delta } = useWeights()
-  const { isLoggedIn } = useAuthStore()
+  const { isLoggedIn, logout } = useAuthStore()
   const [nutritionEntries, setNutritionEntries] = useState<FoodEntry[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [gCalEvents, setGCalEvents] = useState<GCalEvent[]>([])
+  const [gCalError, setGCalError] = useState<'expired' | null>(null)
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([])
   const [assets, setAssets] = useState<Asset[]>([])
   const [loading, setLoading] = useState(true)
@@ -197,8 +198,12 @@ export function InicioPage() {
 
   useEffect(() => {
     if (!isLoggedIn) return
-    getTodayEvents().then(setGCalEvents).catch(() => {})
-    const id = setInterval(() => getTodayEvents().then(setGCalEvents).catch(() => {}), 5 * 60_000)
+    setGCalError(null)
+    const load = () => getTodayEvents()
+      .then(evs => { setGCalEvents(evs); setGCalError(null) })
+      .catch(err => { if (err instanceof TokenExpiredError) setGCalError('expired') })
+    load()
+    const id = setInterval(load, 5 * 60_000)
     return () => clearInterval(id)
   }, [isLoggedIn])
 
@@ -528,6 +533,24 @@ Responde SOLO con este JSON sin texto adicional ni markdown:
             <Calendar size={14} className="text-cyan-400" />
             <Label>Agenda de hoy</Label>
           </div>
+
+          {/* Token expirado */}
+          {gCalError === 'expired' && (
+            <div className="flex items-center gap-2 mb-3 p-2.5 rounded-xl bg-amber-500/8 border border-amber-500/20">
+              <AlertCircle size={13} className="text-amber-400 shrink-0" />
+              <p className="text-xs text-white/50 flex-1">Token de Google expirado</p>
+              <button onClick={logout} className="text-xs text-amber-400 hover:text-amber-300 transition">Reconectar</button>
+            </div>
+          )}
+
+          {/* No conectado */}
+          {!isLoggedIn && (
+            <p className="text-sm text-white/30 mb-2">
+              <button onClick={() => navigate('ajustes')} className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition">Conecta Google Calendar</button>
+              {' '}para ver tu agenda aquí
+            </p>
+          )}
+
           <div className="space-y-2">
             {/* Google Calendar events */}
             {gCalEvents.map((ev) => {
@@ -558,8 +581,11 @@ Responde SOLO con este JSON sin texto adicional ni markdown:
                 </div>
               </div>
             ))}
-            {gCalEvents.length === 0 && todayEvents.length === 0 && (
-              <p className="text-sm text-white/30">Sin eventos programados para hoy</p>
+            {isLoggedIn && gCalError !== 'expired' && gCalEvents.length === 0 && todayEvents.length === 0 && (
+              <p className="text-sm text-white/30">Sin eventos en Google Calendar hoy</p>
+            )}
+            {!isLoggedIn && todayEvents.length === 0 && (
+              <p className="text-sm text-white/30">Sin eventos locales para hoy</p>
             )}
           </div>
         </Card>
