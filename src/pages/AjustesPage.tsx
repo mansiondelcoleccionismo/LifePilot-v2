@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { User, Key, Apple, Palette, Database, Save, Download, Loader2, Bell, Activity } from 'lucide-react'
+import { User, Key, Apple, Palette, Database, Save, Download, Loader2, Bell, Activity, Eye, EyeOff, Film } from 'lucide-react'
 import { DAY_TARGETS, type DayType, type MacroTarget } from '@/types/nutrition'
 import { getActiveKeyInfo, testGeminiKey, testGroqKey, clearCooldowns } from '@/services/ai.service'
 import {
@@ -94,6 +94,9 @@ export function AjustesPage() {
   const [testStates, setTestStates] = useState<Record<string, 'idle' | 'testing' | 'ok' | string>>({})
   const [testErrors, setTestErrors] = useState<Record<string, string>>({})
   const [activeKeyInfo, setActiveKeyInfo] = useState<{ provider: string; index: number } | null>(null)
+  const [tmdbKey, setTmdbKey] = useState('')
+  const [tmdbKeyVisible, setTmdbKeyVisible] = useState(false)
+  const [tmdbTestState, setTmdbTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>(() => loadNotificationSettings())
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
     'Notification' in window ? Notification.permission : 'denied',
@@ -126,6 +129,9 @@ export function AjustesPage() {
     AI_KEY_CONFIGS.forEach(cfg => { keys[cfg.id] = localStorage.getItem(cfg.storageKey)?.trim() ?? '' })
     setAiKeyValues(keys)
     setActiveKeyInfo(getActiveKeyInfo())
+
+    // Load TMDB key
+    setTmdbKey(localStorage.getItem('lifepilot_tmdb_key')?.trim() ?? '')
 
     // Load custom macros
     const savedMacros = localStorage.getItem(STORAGE_KEYS.customMacros)
@@ -194,6 +200,25 @@ export function AjustesPage() {
       setTestErrors(prev => ({ ...prev, [cfg.id]: err }))
     }
     setTimeout(() => setTestStates(prev => ({ ...prev, [cfg.id]: 'idle' })), 6000)
+  }
+
+  const handleSaveTmdbKey = () => {
+    localStorage.setItem('lifepilot_tmdb_key', tmdbKey.trim())
+    setFeedback('TMDB API key guardada')
+    setTimeout(() => setFeedback(''), 2400)
+  }
+
+  const handleTestTmdbKey = async () => {
+    const key = tmdbKey.trim()
+    if (!key) return
+    setTmdbTestState('testing')
+    try {
+      const res = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${key}`)
+      setTmdbTestState(res.ok ? 'ok' : 'fail')
+    } catch {
+      setTmdbTestState('fail')
+    }
+    setTimeout(() => setTmdbTestState('idle'), 6000)
   }
 
   const updateReminder = (id: string, patch: Partial<Reminder>) => {
@@ -513,6 +538,80 @@ export function AjustesPage() {
           >
             Reiniciar cooldowns
           </button>
+        </section>
+
+        {/* TMDB */}
+        <section className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center">
+              <Film size={20} className="text-blue-300" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">APIs externas</p>
+              <div className="flex items-center gap-2 mt-1">
+                <h2 className="text-lg font-semibold text-white/90">🎬 TMDB — The Movie Database</h2>
+                {tmdbKey && (
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-semibold shrink-0">
+                    ACTIVA
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <p className="text-xs text-white/35 mb-1 leading-relaxed">
+            Para cargar pósters y datos de películas y series en la sección Ocio.
+          </p>
+          <a
+            href="https://www.themoviedb.org/settings/api"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition mb-4"
+          >
+            Obtén tu key gratis en themoviedb.org → Settings → API →
+          </a>
+
+          <div className="rounded-2xl border border-white/8 bg-white/3 p-4">
+            <div className="flex gap-2">
+              <div className="flex-1 relative min-w-0">
+                <input
+                  value={tmdbKey}
+                  onChange={e => setTmdbKey(e.target.value)}
+                  type={tmdbKeyVisible ? 'text' : 'password'}
+                  placeholder="eyJhbGc..."
+                  className="w-full rounded-xl bg-white/5 border border-white/8 px-3 py-2.5 pr-10 text-sm text-white/80 focus:outline-none"
+                />
+                <button
+                  onClick={() => setTmdbKeyVisible(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition"
+                  type="button"
+                >
+                  {tmdbKeyVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+              <button
+                onClick={handleSaveTmdbKey}
+                className="rounded-xl bg-emerald-500/15 border border-emerald-500/20 px-3 py-2.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/25 transition shrink-0"
+              >
+                Guardar
+              </button>
+              <button
+                onClick={handleTestTmdbKey}
+                disabled={tmdbTestState === 'testing' || !tmdbKey.trim()}
+                className="rounded-xl bg-white/5 border border-white/8 px-3 py-2.5 text-xs text-white/50 hover:text-white/80 transition shrink-0 disabled:opacity-40 w-16 flex items-center justify-center"
+              >
+                {tmdbTestState === 'testing' ? <Loader2 size={13} className="animate-spin" /> :
+                 tmdbTestState === 'ok' ? '✅' :
+                 tmdbTestState === 'fail' ? '❌' : 'Probar'}
+              </button>
+            </div>
+            {tmdbTestState === 'ok' && (
+              <p className="text-[11px] text-emerald-400 mt-1.5">Conexión correcta — TMDB activo</p>
+            )}
+            {tmdbTestState === 'fail' && (
+              <p className="text-[11px] text-rose-400 mt-1.5">Key inválida o sin conexión</p>
+            )}
+          </div>
         </section>
 
         {/* Nutrición */}
