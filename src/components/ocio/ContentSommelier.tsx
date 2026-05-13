@@ -185,8 +185,14 @@ function RecCard({ rec, index, onStart, onSave }: {
 
   useEffect(() => {
     if (!hasTmdbKey()) return
-    resolvePosterUrl({ title: rec.titulo, year: rec.año }).then(u => { if (u) setPoster(u) })
-  }, [rec.titulo, rec.año])
+    const year = rec.año > 0 ? rec.año : undefined
+    resolvePosterUrl({
+      title: rec.titulo,
+      year,
+      originalTitle: rec.tituloOriginal !== rec.titulo ? rec.tituloOriginal : undefined,
+      mediaType: rec.tipo === 'serie' || rec.tipo === 'anime' ? 'tv' : 'movie',
+    }).then(u => { if (u) setPoster(u) })
+  }, [rec.titulo, rec.tituloOriginal, rec.año, rec.tipo])
 
   const hue = titleHue(rec.titulo)
   const init = posterInitials(rec.titulo)

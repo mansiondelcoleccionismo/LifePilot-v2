@@ -3,7 +3,8 @@ const CACHE_KEY = 'lifepilot_tmdb_cache'
 const CACHE_TTL = 24 * 60 * 60 * 1000
 
 const BASE = 'https://api.themoviedb.org/3'
-export const POSTER_BASE = 'https://image.tmdb.org/t/p/w500'
+export const POSTER_BASE       = 'https://image.tmdb.org/t/p/w500'
+export const POSTER_BASE_SMALL = 'https://image.tmdb.org/t/p/w342'
 
 export interface TmdbResult {
   tmdbId: number
@@ -152,42 +153,96 @@ export async function getTrending(type: 'all' | 'movie' | 'tv' = 'all', timeWind
 }
 
 export async function getPosterUrl(title: string, year?: number): Promise<string | undefined> {
-  try {
-    const q = year ? `${title} ${year}` : title
-    const results = await searchContent(q)
-    return results[0]?.posterUrl
-  } catch {
-    return undefined
-  }
+  return resolvePosterUrl({ title, year })
 }
 
 // Module-level runtime cache — avoids duplicate fetches within a session
 const _posterRuntime = new Map<string, string | null>()
+
+async function searchPosterPath(title: string, year?: number, type: 'movie' | 'tv' = 'movie'): Promise<string | null> {
+  const apiKey = getTmdbKey()
+  if (!apiKey) { console.warn('[TMDB] No API key found in localStorage key:', 'lifepilot_tmdb_key'); return null }
+
+  // Build URL manually so year is a proper param, not part of the query string
+  const yearParam = year && year > 0 ? `&year=${year}&primary_release_year=${year}` : ''
+  const url = `${BASE}/search/${type}?api_key=${apiKey}&language=es-ES&query=${encodeURIComponent(title)}${yearParam}`
+
+  console.log(`[TMDB] Searching poster: ${type} "${title}" year=${year ?? 'none'}`)
+  console.log(`[TMDB] URL: ${url.replace(apiKey, 'KEY')}`)
+
+  const res = await fetch(url)
+  if (!res.ok) { console.error(`[TMDB] HTTP ${res.status}`); return null }
+
+  const data = await res.json() as { results: Array<{ poster_path?: string | null; title?: string; name?: string }> }
+  console.log(`[TMDB] Results (${type}):`, data.results.slice(0, 3).map(r => ({ title: r.title ?? r.name, poster: r.poster_path })))
+
+  if (data.results.length > 0 && data.results[0].poster_path) {
+    return data.results[0].poster_path
+  }
+
+  // Retry without year if we had one and got no results
+  if (year && year > 0 && data.results.length === 0) {
+    console.log(`[TMDB] No results with year, retrying without year...`)
+    const urlNoYear = `${BASE}/search/${type}?api_key=${apiKey}&language=es-ES&query=${encodeURIComponent(title)}`
+    const res2 = await fetch(urlNoYear)
+    if (res2.ok) {
+      const data2 = await res2.json() as { results: Array<{ poster_path?: string | null }> }
+      console.log(`[TMDB] Retry results:`, data2.results.slice(0, 3).map(r => ({ poster: r.poster_path })))
+      if (data2.results[0]?.poster_path) return data2.results[0].poster_path
+    }
+  }
+
+  return null
+}
 
 export async function resolvePosterUrl(opts: {
   tmdbId?: number
   title: string
   year?: number
   mediaType?: 'movie' | 'tv'
+  originalTitle?: string
 }): Promise<string | undefined> {
-  const { tmdbId, title, year, mediaType } = opts
+  const { tmdbId, title, year, mediaType, originalTitle } = opts
   const key = tmdbId ? `id_${mediaType ?? 'movie'}_${tmdbId}` : `q_${title}_${year ?? ''}`
 
   if (_posterRuntime.has(key)) return _posterRuntime.get(key) ?? undefined
 
+  console.log(`[TMDB] resolvePosterUrl: title="${title}" originalTitle="${originalTitle ?? ''}" year=${year} tmdbId=${tmdbId} keyExists=${!!getTmdbKey()}`)
+
   try {
-    let url: string | null = null
+    let posterPath: string | null = null
+
     if (tmdbId) {
       const type = mediaType ?? 'movie'
       const data = await tmdbFetch<{ poster_path?: string }>(`/${type}/${tmdbId}`)
-      url = data.poster_path ? `${POSTER_BASE}${data.poster_path}` : null
+      posterPath = data.poster_path ?? null
+      console.log(`[TMDB] Direct ID lookup poster_path: ${posterPath}`)
     } else {
-      const results = await searchContent(year ? `${title} ${year}` : title)
-      url = results[0]?.posterUrl ?? null
+      const type = mediaType === 'tv' ? 'tv' : 'movie'
+
+      // 1. Try with the given title
+      posterPath = await searchPosterPath(title, year, type)
+
+      // 2. Try with original title if different
+      if (!posterPath && originalTitle && originalTitle !== title) {
+        console.log(`[TMDB] Trying with original title: "${originalTitle}"`)
+        posterPath = await searchPosterPath(originalTitle, year, type)
+      }
+
+      // 3. Cross-type fallback (movie ↔ tv)
+      if (!posterPath) {
+        const altType = type === 'movie' ? 'tv' : 'movie'
+        console.log(`[TMDB] Trying ${altType} search...`)
+        posterPath = await searchPosterPath(title, year, altType)
+      }
     }
+
+    const url = posterPath ? `${POSTER_BASE_SMALL}${posterPath}` : null
+    console.log(`[TMDB] Final poster URL: ${url}`)
     _posterRuntime.set(key, url)
     return url ?? undefined
-  } catch {
+  } catch (err) {
+    console.error('[TMDB] resolvePosterUrl error:', err)
     _posterRuntime.set(key, null)
     return undefined
   }
