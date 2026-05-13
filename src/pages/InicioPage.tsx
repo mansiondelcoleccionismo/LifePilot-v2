@@ -53,7 +53,7 @@ function PageSkeleton() {
 export function InicioPage() {
   const navigate  = useNavigate()
   const { user }  = useAuthStore()
-  const firstName = user?.name?.split(' ')[0] ?? 'Daniel'
+  const firstName = 'Dani'
 
   // ── Time (frozen at render) ───────────────────────────────────────────────
   const todayStr  = useMemo(() => new Date().toISOString().slice(0, 10), [])
