@@ -244,6 +244,52 @@ export async function testGroqKey(key: string): Promise<string | null> {
   }
 }
 
+// ── Ocio recommendations ─────────────────────────────────────────────────────
+export interface OcioRecommendation {
+  title: string
+  titleOriginal: string
+  platform: string
+  duration: number
+  reason: string
+  type: 'pelicula' | 'serie' | 'documental'
+  posterUrl?: string
+}
+
+export async function getOcioRecommendations(params: {
+  lastWatched: Array<{ title: string; rating?: number; type: string }>
+  mood?: number
+  hour: number
+  platforms: string[]
+}): Promise<OcioRecommendation[]> {
+  const { lastWatched, mood, hour, platforms } = params
+  const lastStr = lastWatched.length
+    ? lastWatched.slice(0, 5).map(c => `${c.title} (${c.rating ?? '?'}/10)`).join(', ')
+    : 'nada reciente'
+  const availableTime = Math.round(Math.max((24 - hour) * 60, 90))
+  const moodStr = mood ? `${mood}/5` : 'sin dato'
+
+  const prompt = `Eres un experto en cine, series y documentales con gusto sofisticado.
+Daniel (35 años, España) ha visto recientemente: ${lastStr}.
+Géneros favoritos: thriller, drama social, documental histórico, anime de culto, cine de autor, true crime, geopolítica, historia España (franquismo, transición, guerra civil), crimen organizado real.
+Evita: romance, comedia romántica, superhéroes Marvel.
+Plataformas disponibles: ${platforms.join(', ')}.
+Hora actual: ${hour}h. Tiempo disponible: ~${availableTime} min. Mood: ${moodStr}.
+
+Recomiéndalo exactamente 3 títulos para esta noche. Usa títulos que existan realmente.
+
+Responde ÚNICAMENTE con JSON válido, sin texto extra:
+[{"title":"título en español","titleOriginal":"título original en inglés/japonés","platform":"plataforma donde está disponible en España ahora","duration":minutos,"reason":"razón específica máx 15 palabras","type":"pelicula|serie|documental"}]`
+
+  const raw = await callAI(prompt, undefined, true)
+  const match = raw.match(/\[[\s\S]*?\]/)
+  if (!match) return []
+  try {
+    return JSON.parse(match[0]) as OcioRecommendation[]
+  } catch {
+    return []
+  }
+}
+
 // ── Backward-compatible exports ───────────────────────────────────────────────
 export async function generateBriefing(): Promise<string> {
   return callAI(
