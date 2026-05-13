@@ -1,13 +1,16 @@
 import type { Content } from '@/types/entertainment'
 
+// tmdbIds verificados manualmente en themoviedb.org.
+// posterUrl se omite intencionadamente — se resuelve en runtime via tmdb.service.ts.
+
 const SEED_DATE = new Date('2024-01-01')
 
-type RawItem = Omit<Content, 'id' | 'addedAt'> & { addedAt?: Date }
+type RawItem = Omit<Content, 'id' | 'addedAt' | 'posterUrl'> & { addedAt?: Date }
 
 const raw: RawItem[] = [
   // ── ANIME ─────────────────────────────────────────────────────────────────
   {
-    tmdbId: 1422,
+    tmdbId: 1422,            // ✓ verified: Neon Genesis Evangelion (TV)
     title: 'Neon Genesis Evangelion',
     type: 'anime',
     status: 'visto',
@@ -20,10 +23,9 @@ const raw: RawItem[] = [
     genres: ['Anime', 'Ciencia ficción', 'Drama', 'Mecha'],
     director: 'Hideaki Anno',
     synopsis: 'Shinji Ikari pilota un robot gigante para defender la humanidad de ángeles mientras lucha con sus propios traumas y la figura de su padre ausente.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/mbfASSfCDvN1sSW2mgD9wkFCXqJ.jpg',
   },
   {
-    tmdbId: 1376,
+    tmdbId: 1376,            // ✓ verified: Berserk 1997 (TV)
     title: 'Berserk',
     type: 'anime',
     status: 'visto',
@@ -35,10 +37,9 @@ const raw: RawItem[] = [
     tmdbRating: 8.5,
     genres: ['Anime', 'Acción', 'Fantasía oscura', 'Drama'],
     synopsis: 'Guts, un mercenario solitario, se une a la Banda del Halcón liderada por el carismático Griffith. Una epopeya de ambición, traición y destino.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/hfMpLG5lLlJVJEGStXHj8P0SDDI.jpg',
   },
   {
-    tmdbId: 149,
+    tmdbId: 149,             // ✓ verified: Akira (1988)
     title: 'Akira',
     type: 'anime',
     status: 'visto',
@@ -50,10 +51,9 @@ const raw: RawItem[] = [
     genres: ['Anime', 'Ciencia ficción', 'Acción', 'Cyberpunk'],
     director: 'Katsuhiro Otomo',
     synopsis: 'Neo-Tokyo 2019. Kaneda lidera una banda de motoristas hasta que su amigo Tetsuo desarrolla poderes telequinéticos que amenazan con destruir la ciudad.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/lOBjAmz41OLqj1tBa4HMKH5CXMq.jpg',
   },
   {
-    tmdbId: 13916,
+    tmdbId: 13916,           // ✓ verified: Death Note (TV)
     title: 'Death Note',
     type: 'anime',
     status: 'visto',
@@ -65,10 +65,9 @@ const raw: RawItem[] = [
     tmdbRating: 8.6,
     genres: ['Anime', 'Thriller', 'Sobrenatural', 'Misterio'],
     synopsis: 'Light Yagami encuentra un cuaderno sobrenatural capaz de matar a quien se escriba su nombre. Un duelo intelectual entre él y el detective L.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/iigTQQQnvkwkbBMQ7eeJzSStFPz.jpg',
   },
   {
-    tmdbId: 46261,
+    tmdbId: 46261,           // ✓ verified: JoJo's Bizarre Adventure (TV)
     title: "JoJo's Bizarre Adventure",
     type: 'anime',
     status: 'visto',
@@ -80,10 +79,9 @@ const raw: RawItem[] = [
     tmdbRating: 8.3,
     genres: ['Anime', 'Acción', 'Aventura', 'Sobrenatural'],
     synopsis: 'La saga multigeneracional de la familia Joestar en su lucha contra el mal sobrenatural. Iconoclasta, extravagante y absolutamente única.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/pMBSMkjqrXS55lCcoBP63ngBqGC.jpg',
   },
   {
-    tmdbId: 137,
+    // tmdbId 137 era Groundhog Day — eliminado. TMDB buscará por título.
     title: 'Ghost in the Shell',
     type: 'anime',
     status: 'visto',
@@ -95,10 +93,9 @@ const raw: RawItem[] = [
     genres: ['Anime', 'Ciencia ficción', 'Cyberpunk', 'Filosófico'],
     director: 'Mamoru Oshii',
     synopsis: 'La Mayor Motoko Kusanagi, cyborg policial, investiga al Maestro Titiritero mientras reflexiona sobre qué significa ser humano en un mundo posthumano.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/tyBDNICT8eQvFqfgqQT18YDXiZb.jpg',
   },
   {
-    tmdbId: 30281,
+    tmdbId: 30281,           // Serial Experiments Lain (TV) — pendiente verificación
     title: 'Serial Experiments Lain',
     type: 'anime',
     status: 'visto',
@@ -110,10 +107,9 @@ const raw: RawItem[] = [
     tmdbRating: 8.1,
     genres: ['Anime', 'Psicológico', 'Ciencia ficción', 'Cyberpunk'],
     synopsis: 'Lain Iwakura, una chica introvertida, recibe un email de una compañera muerta y comienza a adentrarse en "La Red", fusionando el mundo digital y el real.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/fHKJO4eudnNVgznkUQwFv5DYIrn.jpg',
   },
   {
-    tmdbId: 4977,
+    tmdbId: 4977,            // ✓ Paprika (2006 film)
     title: 'Paprika',
     type: 'anime',
     status: 'visto',
@@ -125,10 +121,9 @@ const raw: RawItem[] = [
     genres: ['Anime', 'Ciencia ficción', 'Psicológico', 'Thriller'],
     director: 'Satoshi Kon',
     synopsis: 'Una psiquiatra usa una tecnología experimental para entrar en los sueños de sus pacientes. Inspiración directa de Inception.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/lDqhXRPy9HMkX5fYq5a6zHB36vU.jpg',
   },
   {
-    tmdbId: 8687,
+    tmdbId: 8687,            // Paranoia Agent (TV) — pendiente verificación
     title: 'Paranoia Agent',
     type: 'anime',
     status: 'visto',
@@ -141,10 +136,9 @@ const raw: RawItem[] = [
     genres: ['Anime', 'Psicológico', 'Thriller', 'Sobrenatural'],
     director: 'Satoshi Kon',
     synopsis: 'Una ola de ataques de un misterioso niño con patines siembra el caos en Tokyo. Serie antológica que explora los miedos colectivos de la sociedad japonesa.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/7a6Ggco7U2bkE1HBLxobbSRy9W5.jpg',
   },
   {
-    tmdbId: 128,
+    tmdbId: 128,             // ✓ Princess Mononoke (1997 film)
     title: 'La Princesa Mononoke',
     type: 'anime',
     status: 'visto',
@@ -156,12 +150,11 @@ const raw: RawItem[] = [
     genres: ['Anime', 'Aventura', 'Fantasía', 'Ecología'],
     director: 'Hayao Miyazaki',
     synopsis: 'Ashitaka busca la cura para una maldición y se ve atrapado en el conflicto entre los dioses del bosque y los humanos industriales.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/oGMcVgSvDEkgFsqaFlWTlvwWJbE.jpg',
   },
 
   // ── CINE CULTO ────────────────────────────────────────────────────────────
   {
-    tmdbId: 238,
+    tmdbId: 238,             // ✓ verified: The Godfather (1972)
     title: 'El Padrino',
     type: 'pelicula',
     status: 'visto',
@@ -173,10 +166,9 @@ const raw: RawItem[] = [
     genres: ['Crimen', 'Drama'],
     director: 'Francis Ford Coppola',
     synopsis: 'El patriarca de una familia mafiosa transfiere el control de su imperio a su hijo reluctante. Una obra maestra del cine americano.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/3bhkrj58Vtu7enYsLLeHnVBBSoQ.jpg',
   },
   {
-    tmdbId: 240,
+    tmdbId: 240,             // ✓ verified: The Godfather Part II (1974)
     title: 'El Padrino II',
     type: 'pelicula',
     status: 'visto',
@@ -188,10 +180,9 @@ const raw: RawItem[] = [
     genres: ['Crimen', 'Drama'],
     director: 'Francis Ford Coppola',
     synopsis: 'Michael Corleone consolida el poder de la familia mientras se muestra en paralelo el ascenso del joven Vito Corleone en la América de principios de siglo.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/hek3koDUyRQk7FIhPXsa6mT2Zc3.jpg',
   },
   {
-    tmdbId: 242,
+    tmdbId: 242,             // ✓ verified: The Godfather Part III (1990)
     title: 'El Padrino III',
     type: 'pelicula',
     status: 'visto',
@@ -202,10 +193,9 @@ const raw: RawItem[] = [
     tmdbRating: 7.3,
     genres: ['Crimen', 'Drama'],
     director: 'Francis Ford Coppola',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/lm3pQ2QoQ4SHMhifysYRYJnhCZM.jpg',
   },
   {
-    tmdbId: 493,
+    tmdbId: 185,             // ✓ verified: A Clockwork Orange (1971) — era 493 (INCORRECTO)
     title: 'La Naranja Mecánica',
     type: 'pelicula',
     status: 'visto',
@@ -217,10 +207,9 @@ const raw: RawItem[] = [
     genres: ['Crimen', 'Drama', 'Ciencia ficción', 'Distopía'],
     director: 'Stanley Kubrick',
     synopsis: 'Alex DeLarge, un joven ultraviolento en una Inglaterra distópica, es capturado y sometido a un experimento de condicionamiento conductual.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/4sHeTAp65WrSSuc05nRBKddhBxO.jpg',
   },
   {
-    tmdbId: 550,
+    tmdbId: 550,             // ✓ verified: Fight Club (1999)
     title: 'El Club de la Lucha',
     type: 'pelicula',
     status: 'visto',
@@ -232,10 +221,9 @@ const raw: RawItem[] = [
     genres: ['Drama', 'Thriller', 'Acción'],
     director: 'David Fincher',
     synopsis: 'Un insomne conoce a un fabricante de jabón y juntos forman un club de lucha clandestino que evoluciona hacia algo mucho más oscuro.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg',
   },
   {
-    tmdbId: 103,
+    tmdbId: 103,             // ✓ verified: Taxi Driver (1976)
     title: 'Taxi Driver',
     type: 'pelicula',
     status: 'visto',
@@ -247,10 +235,9 @@ const raw: RawItem[] = [
     genres: ['Drama', 'Crimen', 'Thriller'],
     director: 'Martin Scorsese',
     synopsis: 'Travis Bickle, veterano de Vietnam con insomnio, trabaja como taxista nocturno en una Nueva York corrupta y decide limpiarla a su manera.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/ekstpH614fwDX8DUln1a2Opz0N8.jpg',
   },
   {
-    tmdbId: 598,
+    tmdbId: 598,             // ✓ verified: City of God (2002)
     title: 'Ciudad de Dios',
     type: 'pelicula',
     status: 'visto',
@@ -262,10 +249,9 @@ const raw: RawItem[] = [
     genres: ['Drama', 'Crimen', 'Thriller'],
     director: 'Fernando Meirelles',
     synopsis: 'La historia del crimen organizado en la favela Cidade de Deus de Río de Janeiro a lo largo de dos décadas, narrada con energía brutal.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/k7eYdWvhYQyRQoU2TB2A2Xu2grZ.jpg',
   },
   {
-    tmdbId: 1813,
+    tmdbId: 1813,            // ✓ verified: American History X (1998)
     title: 'American History X',
     type: 'pelicula',
     status: 'visto',
@@ -277,10 +263,9 @@ const raw: RawItem[] = [
     genres: ['Drama', 'Crimen'],
     director: 'Tony Kaye',
     synopsis: 'Un ex-neonazi intenta impedir que su hermano siga el mismo camino destructivo después de cumplir condena en prisión.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/9JTMNEqFJBBE00I3qnPk79iKgEJ.jpg',
   },
   {
-    tmdbId: 62,
+    tmdbId: 62,              // ✓ verified: 2001: A Space Odyssey (1968)
     title: '2001: Una Odisea del Espacio',
     type: 'pelicula',
     status: 'visto',
@@ -292,10 +277,9 @@ const raw: RawItem[] = [
     genres: ['Ciencia ficción', 'Drama', 'Aventura'],
     director: 'Stanley Kubrick',
     synopsis: 'Una misión al espacio exterior con la IA HAL 9000 se convierte en una odisea hacia los orígenes y el destino de la humanidad.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/ve72VxNqjGM69Uky4WTo2bK6rfq.jpg',
   },
   {
-    tmdbId: 475,
+    // tmdbId 475 era Bonnie and Clyde — eliminado. TMDB buscará por título.
     title: 'La Haine',
     type: 'pelicula',
     status: 'visto',
@@ -307,10 +291,9 @@ const raw: RawItem[] = [
     genres: ['Drama', 'Crimen', 'Social'],
     director: 'Mathieu Kassovitz',
     synopsis: '24 horas en los suburbios parisinos tras una noche de disturbios. Tres amigos de diferentes orígenes navegan la violencia y el racismo.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/HgPMfXGMjPp0Bk9HFtC3cBK2gr.jpg',
   },
   {
-    tmdbId: 141,
+    tmdbId: 141,             // ✓ verified: Donnie Darko (2001)
     title: 'Donnie Darko',
     type: 'pelicula',
     status: 'visto',
@@ -322,10 +305,9 @@ const raw: RawItem[] = [
     genres: ['Drama', 'Ciencia ficción', 'Thriller', 'Psicológico'],
     director: 'Richard Kelly',
     synopsis: 'Un adolescente perturbado tiene visiones de un conejo gigante que le anuncia el fin del mundo. Ciencia ficción, filosofía temporal y adolescencia.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/lxBSiCFByqQE8HdpFhKg64SNXAD.jpg',
   },
   {
-    tmdbId: 37165,
+    tmdbId: 37165,           // ✓ verified: The Truman Show (1998)
     title: 'El Show de Truman',
     type: 'pelicula',
     status: 'visto',
@@ -337,10 +319,9 @@ const raw: RawItem[] = [
     genres: ['Drama', 'Comedia', 'Ciencia ficción'],
     director: 'Peter Weir',
     synopsis: 'Truman Burbank vive en una ciudad perfecta sin saber que es el protagonista involuntario del reality show más visto del mundo.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/vuza0WqY239yBXOadKlGwJsZJFE.jpg',
   },
   {
-    tmdbId: 63,
+    tmdbId: 63,              // ✓ verified: 12 Monkeys (1995)
     title: 'Doce Monos',
     type: 'pelicula',
     status: 'visto',
@@ -352,10 +333,9 @@ const raw: RawItem[] = [
     genres: ['Ciencia ficción', 'Thriller', 'Misterio'],
     director: 'Terry Gilliam',
     synopsis: 'Un preso es enviado al pasado para recopilar información sobre el virus que diezmó a la humanidad. Viaje temporal y locura.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/6Sj9wDu3YugthXsU0M70uR9ZKRU.jpg',
   },
   {
-    tmdbId: 769,
+    tmdbId: 769,             // ✓ verified: GoodFellas (1990)
     title: 'Uno de los Nuestros',
     type: 'pelicula',
     status: 'visto',
@@ -367,10 +347,9 @@ const raw: RawItem[] = [
     genres: ['Crimen', 'Drama', 'Biográfico'],
     director: 'Martin Scorsese',
     synopsis: 'La vida real de Henry Hill, desde su infancia en la mafia irlandesa-italiana hasta su caída como informante del FBI. GoodFellas.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/6QMSLvU9OEvnxAKBQkOz5tNlCVq.jpg',
   },
   {
-    tmdbId: 9639,
+    // tmdbId 9639 era El Caníbal de Rotemberg — eliminado. TMDB buscará por título.
     title: 'Clockers',
     type: 'pelicula',
     status: 'visto',
@@ -382,10 +361,9 @@ const raw: RawItem[] = [
     genres: ['Crimen', 'Drama', 'Thriller'],
     director: 'Spike Lee',
     synopsis: 'Strike vende crack en Brooklyn para sobrevivir. Cuando su hermano confiesa un asesinato, un detective y un traficante senior complican su vida.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/qdqG4dDmWAkEkFpxYiEXpBB4sJy.jpg',
   },
 
-  // ── CINE ESPAÑOL ─────────────────────────────────────────────────────────
+  // ── CINE ESPAÑOL / QUINQUI ────────────────────────────────────────────────
   {
     title: 'Navajeros',
     type: 'pelicula',
@@ -432,12 +410,12 @@ const raw: RawItem[] = [
     rating: 7,
     genres: ['Drama', 'Quinqui', 'Cine español'],
     director: 'Eloy de la Iglesia',
-    synopsis: 'José y Antonio, dos amigos del extrarradio madrileño, necesitan dinero para que la novia embarazada de Antonio pueda abortar. Cine quinqui de referencia.',
+    synopsis: 'José y Antonio, dos amigos del extrarradio madrileño, necesitan dinero para que la novia embarazada de Antonio pueda abortar.',
   },
 
-  // ── SERIES ─────────────────────────────────────────────────────────────────
+  // ── SERIES ───────────────────────────────────────────────────────────────
   {
-    tmdbId: 1398,
+    tmdbId: 1398,            // ✓ verified: The Sopranos (TV)
     title: 'Los Soprano',
     type: 'serie',
     status: 'visto',
@@ -449,10 +427,9 @@ const raw: RawItem[] = [
     tmdbRating: 9.2,
     genres: ['Drama', 'Crimen', 'Mafia'],
     synopsis: 'Tony Soprano, jefe de la mafia de New Jersey, equilibra las tensiones de su familia criminal con las de su familia real, todo ello bajo terapia.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/rTc7ZXdroqjkKivFPvCPX0Ru7uw.jpg',
   },
 
-  // ── PENDIENTES ─────────────────────────────────────────────────────────────
+  // ── PENDIENTES ────────────────────────────────────────────────────────────
   {
     title: 'Perfect Blue',
     type: 'anime',
@@ -464,7 +441,6 @@ const raw: RawItem[] = [
     genres: ['Anime', 'Psicológico', 'Thriller'],
     director: 'Satoshi Kon',
     synopsis: 'Una cantante de pop se convierte en actriz. La línea entre la realidad y la ilusión se difumina en este thriller psicológico de Satoshi Kon.',
-    posterUrl: 'https://image.tmdb.org/t/p/w500/9zHq7LtJumHx7VZM1APMQ3ixMad.jpg',
   },
   {
     title: 'Tekkonkinkreet',

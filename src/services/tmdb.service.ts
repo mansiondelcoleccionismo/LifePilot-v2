@@ -160,3 +160,35 @@ export async function getPosterUrl(title: string, year?: number): Promise<string
     return undefined
   }
 }
+
+// Module-level runtime cache — avoids duplicate fetches within a session
+const _posterRuntime = new Map<string, string | null>()
+
+export async function resolvePosterUrl(opts: {
+  tmdbId?: number
+  title: string
+  year?: number
+  mediaType?: 'movie' | 'tv'
+}): Promise<string | undefined> {
+  const { tmdbId, title, year, mediaType } = opts
+  const key = tmdbId ? `id_${mediaType ?? 'movie'}_${tmdbId}` : `q_${title}_${year ?? ''}`
+
+  if (_posterRuntime.has(key)) return _posterRuntime.get(key) ?? undefined
+
+  try {
+    let url: string | null = null
+    if (tmdbId) {
+      const type = mediaType ?? 'movie'
+      const data = await tmdbFetch<{ poster_path?: string }>(`/${type}/${tmdbId}`)
+      url = data.poster_path ? `${POSTER_BASE}${data.poster_path}` : null
+    } else {
+      const results = await searchContent(year ? `${title} ${year}` : title)
+      url = results[0]?.posterUrl ?? null
+    }
+    _posterRuntime.set(key, url)
+    return url ?? undefined
+  } catch {
+    _posterRuntime.set(key, null)
+    return undefined
+  }
+}

@@ -15,7 +15,7 @@ import {
 } from '@/services/entertainment.service'
 import {
   searchContent as tmdbSearch, getContentDetails, getSimilar,
-  getTrending, hasTmdbKey, saveTmdbKey,
+  getTrending, hasTmdbKey, saveTmdbKey, resolvePosterUrl,
 } from '@/services/tmdb.service'
 import { getOcioRecommendations } from '@/services/ai.service'
 import type { OcioRecommendation } from '@/services/ai.service'
@@ -84,14 +84,52 @@ const CURATED_GEOPOLITICA = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function PosterImg({ url, title, className = '' }: { url?: string; title: string; className?: string }) {
+function titleToHue(title: string): number {
+  let h = 0
+  for (let i = 0; i < title.length; i++) { h = (h << 5) - h + title.charCodeAt(i); h |= 0 }
+  return Math.abs(h) % 360
+}
+
+const SKIP_WORDS = new Set(['el', 'la', 'los', 'las', 'the', 'a', 'an', 'un', 'una', 'de', 'of'])
+
+function titleInitials(title: string): string {
+  const words = title.split(/\s+/).filter(w => !SKIP_WORDS.has(w.toLowerCase()))
+  if (words.length === 0) return title.slice(0, 2).toUpperCase()
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
+  return (words[0][0] + words[1][0]).toUpperCase()
+}
+
+function usePosterUrl(staticUrl?: string, tmdbId?: number, title?: string, year?: number) {
+  const [resolved, setResolved] = useState<string | undefined>(staticUrl)
+  useEffect(() => {
+    if (staticUrl) { setResolved(staticUrl); return }
+    if (!hasTmdbKey()) return
+    if (!tmdbId && !title) return
+    let cancelled = false
+    resolvePosterUrl({ tmdbId, title: title ?? '', year })
+      .then(u => { if (!cancelled && u) setResolved(u) })
+    return () => { cancelled = true }
+  }, [staticUrl, tmdbId, title, year])
+  return resolved
+}
+
+function PosterImg({ url, title, className = '', tmdbId, year }: {
+  url?: string; title: string; className?: string; tmdbId?: number; year?: number
+}) {
   const [err, setErr] = useState(false)
-  if (url && !err) {
-    return <img src={url} alt={title} className={`object-cover ${className}`} loading="lazy" onError={() => setErr(true)} />
+  const resolvedUrl = usePosterUrl(url, tmdbId, title, year)
+  const hue = titleToHue(title)
+  const initials = titleInitials(title)
+
+  if (resolvedUrl && !err) {
+    return <img src={resolvedUrl} alt={title} className={`object-cover ${className}`} loading="lazy" onError={() => setErr(true)} />
   }
   return (
-    <div className={`flex items-center justify-center bg-white/8 text-white/25 text-center font-bold leading-tight p-2 ${className}`}>
-      {title.slice(0, 3).toUpperCase()}
+    <div
+      className={`flex items-center justify-center text-white font-bold leading-tight select-none ${className}`}
+      style={{ background: `hsl(${hue}, 40%, 22%)` }}
+    >
+      <span className="text-lg tracking-wide opacity-90">{initials}</span>
     </div>
   )
 }
@@ -183,7 +221,7 @@ function PosterCard({ item, onClick }: { item: Content; onClick: () => void }) {
       className="relative cursor-pointer rounded-xl overflow-hidden group shadow-md"
       style={{ aspectRatio: '2/3' }}
     >
-      <PosterImg url={item.posterUrl} title={item.title} className="w-full h-full" />
+      <PosterImg url={item.posterUrl} title={item.title} tmdbId={item.tmdbId} year={item.year} className="w-full h-full" />
       <div className="absolute inset-0 bg-linear-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200">
         <div className="absolute bottom-0 left-0 right-0 p-2.5">
           <p className="text-white text-xs font-semibold leading-tight line-clamp-2">{item.title}</p>
@@ -226,7 +264,7 @@ function HSection({
                 className="shrink-0 w-25 cursor-pointer"
               >
                 <div className="w-25 rounded-xl overflow-hidden mb-1.5 shadow-md" style={{ aspectRatio: '2/3' }}>
-                  <PosterImg url={item.posterUrl} title={item.title} className="w-full h-full" />
+                  <PosterImg url={item.posterUrl} title={item.title} tmdbId={item.tmdbId} year={item.year} className="w-full h-full" />
                 </div>
                 <p className="text-[11px] text-white/65 line-clamp-2 leading-tight">{item.title}</p>
                 {item.tmdbRating && (
@@ -488,7 +526,7 @@ function TabViendo({ content, onItemClick }: { content: Content[]; onItemClick: 
           <motion.div key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
             className="flex gap-4 rounded-2xl border border-white/8 bg-[#1a1a28] p-4 hover:border-white/14 transition">
             <div className="w-16 shrink-0 rounded-lg overflow-hidden shadow-lg cursor-pointer" style={{ aspectRatio: '2/3' }} onClick={() => onItemClick(item)}>
-              <PosterImg url={item.posterUrl} title={item.title} className="w-full h-full" />
+              <PosterImg url={item.posterUrl} title={item.title} tmdbId={item.tmdbId} year={item.year} className="w-full h-full" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2 mb-1">
@@ -574,7 +612,7 @@ function TabVisto({ content, onItemClick }: { content: Content[]; onItemClick: (
               <div key={item.id} onClick={() => onItemClick(item)}
                 className="flex gap-3 items-center rounded-xl border border-white/8 bg-[#1a1a28] p-3 hover:border-white/14 cursor-pointer transition">
                 <div className="w-10 shrink-0 rounded-md overflow-hidden shadow" style={{ aspectRatio: '2/3' }}>
-                  <PosterImg url={item.posterUrl} title={item.title} className="w-full h-full" />
+                  <PosterImg url={item.posterUrl} title={item.title} tmdbId={item.tmdbId} year={item.year} className="w-full h-full" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-white/85 truncate">{item.title}</p>
@@ -931,7 +969,7 @@ function AddContentModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
                           <button key={r.tmdbId} onClick={() => { setSelected(r); setQuery(r.title) }}
                             className="flex items-center gap-3 w-full rounded-lg hover:bg-white/8 p-2 text-left transition">
                             <div className="w-9 shrink-0 rounded overflow-hidden" style={{ aspectRatio: '2/3' }}>
-                              <PosterImg url={r.posterUrl} title={r.title} className="w-full h-full" />
+                              <PosterImg url={r.posterUrl} title={r.title} tmdbId={r.tmdbId} year={r.year} className="w-full h-full" />
                             </div>
                             <div className="min-w-0">
                               <p className="text-sm text-white/85 truncate">{r.title}</p>
@@ -952,7 +990,7 @@ function AddContentModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
                   {selected && (
                     <div className="flex gap-3 rounded-xl border border-violet-500/30 bg-violet-500/8 p-3">
                       <div className="w-12 shrink-0 rounded-lg overflow-hidden" style={{ aspectRatio: '2/3' }}>
-                        <PosterImg url={selected.posterUrl} title={selected.title} className="w-full h-full" />
+                        <PosterImg url={selected.posterUrl} title={selected.title} tmdbId={selected.tmdbId} year={selected.year} className="w-full h-full" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white/90">{selected.title}</p>
@@ -1102,7 +1140,7 @@ function ContentDetailModal({ item, onClose, onDelete }: {
           </button>
           <div className="absolute bottom-0 left-0 right-0 flex gap-4 p-4">
             <div className="w-16 shrink-0 rounded-xl overflow-hidden shadow-xl" style={{ aspectRatio: '2/3' }}>
-              <PosterImg url={item.posterUrl} title={item.title} className="w-full h-full" />
+              <PosterImg url={item.posterUrl} title={item.title} tmdbId={item.tmdbId} year={item.year} className="w-full h-full" />
             </div>
             <div className="self-end pb-1">
               <h2 className="font-bold text-white text-base leading-tight">{item.title}</h2>
