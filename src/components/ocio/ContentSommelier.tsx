@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { motion } from 'framer-motion'
-import { Send, ChevronDown, Sparkles } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Send, ChevronDown, Sparkles, RefreshCw } from 'lucide-react'
 import { callAI } from '@/services/ai.service'
 import { addContent } from '@/services/entertainment.service'
 import { resolvePosterUrl, hasTmdbKey } from '@/services/tmdb.service'
@@ -21,13 +21,14 @@ interface SommelierRec {
 type ChatMsgInput =
   | { role: 'sommelier'; text: string }
   | { role: 'user'; text: string }
-  | { role: 'recs'; text: string; recs: SommelierRec[] }
+  | { role: 'recs'; recs: SommelierRec[]; intro: string }
+  | { role: 'error'; onRetry: () => void }
 
 type ChatMsg = ChatMsgInput & { id: string }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function cleanMarkdown(text: string): string {
+function cleanText(text: string): string {
   return text
     .replace(/\*\*(.+?)\*\*/g, '$1')
     .replace(/\*(.+?)\*/g, '$1')
@@ -39,20 +40,17 @@ function cleanMarkdown(text: string): string {
     .trim()
 }
 
-function useTypewriter(text: string, speed = 8) {
-  const [displayed, setDisplayed] = useState('')
-  useEffect(() => {
-    setDisplayed('')
-    if (!text) return
-    let i = 0
-    const id = setInterval(() => {
-      i++
-      setDisplayed(text.slice(0, i))
-      if (i >= text.length) clearInterval(id)
-    }, speed)
-    return () => clearInterval(id)
-  }, [text])
-  return displayed
+// Strip code fences then find the outermost { } JSON object
+function extractJson<T>(raw: string): T | null {
+  const stripped = raw.replace(/```(?:json)?/gi, '').replace(/```/g, '')
+  const start = stripped.indexOf('{')
+  const end = stripped.lastIndexOf('}')
+  if (start === -1 || end === -1 || end <= start) return null
+  try {
+    return JSON.parse(stripped.slice(start, end + 1)) as T
+  } catch {
+    return null
+  }
 }
 
 function platStyle(p: string): string {
@@ -95,12 +93,11 @@ function streakInfo(content: Content[]): string {
     byDay.get(day)!.push(item.type)
   }
   const days = [...byDay.keys()].sort().reverse()
-  let count = 0
-  let dominant = ''
+  let count = 0; let dominant = ''
   for (const day of days) {
     const types = byDay.get(day)!
-    const seriesCount = types.filter(t => t === 'serie' || t === 'anime').length
-    const dayType = seriesCount > types.length / 2 ? 'series' : 'películas'
+    const isSeries = types.filter(t => t === 'serie' || t === 'anime').length > types.length / 2
+    const dayType = isSeries ? 'series' : 'películas'
     if (count === 0) dominant = dayType
     if (dayType !== dominant) break
     count++
@@ -133,14 +130,11 @@ function Dots() {
 }
 
 function SommelierBubble({ text }: { text: string }) {
-  const displayed = useTypewriter(text)
   return (
     <div className="flex gap-3 items-start">
       <Avatar />
       <div className="flex-1 max-w-[88%] rounded-2xl rounded-tl-sm bg-white/6 border border-white/8 px-4 py-3">
-        <p className="text-sm text-white/82 leading-relaxed whitespace-pre-wrap">
-          {displayed || <Dots />}
-        </p>
+        <p className="text-sm text-white/85 leading-relaxed">{text}</p>
       </div>
     </div>
   )
@@ -150,7 +144,7 @@ function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-end">
       <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-violet-600/30 border border-violet-500/20 px-4 py-2.5">
-        <p className="text-sm text-white/82">{text}</p>
+        <p className="text-sm text-white/85">{text}</p>
       </div>
     </div>
   )
@@ -162,6 +156,21 @@ function LoadingBubble() {
       <Avatar />
       <div className="rounded-2xl rounded-tl-sm bg-white/6 border border-white/8 px-4 py-3.5">
         <Dots />
+      </div>
+    </div>
+  )
+}
+
+function ErrorBubble({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex gap-3 items-start">
+      <Avatar />
+      <div className="flex-1 max-w-[88%] rounded-2xl rounded-tl-sm bg-rose-500/8 border border-rose-500/20 px-4 py-3">
+        <p className="text-sm text-white/60 mb-2">No pude obtener las recomendaciones. ¿Lo intentamos de nuevo?</p>
+        <button onClick={onRetry}
+          className="flex items-center gap-1.5 text-xs text-violet-300 hover:text-violet-200 transition">
+          <RefreshCw size={11} /> Intentar de nuevo
+        </button>
       </div>
     </div>
   )
@@ -187,10 +196,10 @@ function RecCard({ rec, index, onStart, onSave }: {
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: -14 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.14, duration: 0.38 }}
-      className="flex gap-3 rounded-2xl border border-white/8 bg-white/4 p-3 hover:border-white/14 transition"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.1, duration: 0.3 }}
+      className="flex gap-3 rounded-2xl border border-white/8 bg-white/4 p-3 hover:border-violet-500/25 transition-all"
     >
       <div className="shrink-0 w-17.5 rounded-xl overflow-hidden shadow-lg" style={{ aspectRatio: '2/3' }}>
         {poster
@@ -202,9 +211,9 @@ function RecCard({ rec, index, onStart, onSave }: {
 
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         <div>
-          <h4 className="font-semibold text-white/90 text-sm leading-tight line-clamp-1">{rec.titulo}</h4>
+          <h4 className="font-semibold text-white/92 text-sm leading-tight">{rec.titulo}</h4>
           {rec.tituloOriginal && rec.tituloOriginal !== rec.titulo && (
-            <p className="text-[11px] text-white/30 line-clamp-1 italic">{rec.tituloOriginal}</p>
+            <p className="text-[11px] text-white/28 italic truncate">{rec.tituloOriginal}</p>
           )}
         </div>
         <div className="flex flex-wrap gap-1">
@@ -214,19 +223,14 @@ function RecCard({ rec, index, onStart, onSave }: {
           <span className="px-2 py-0.5 rounded-full text-[10px] bg-white/6 text-white/40 border border-white/8">{dur}</span>
           <span className="px-2 py-0.5 rounded-full text-[10px] bg-white/6 text-white/40 border border-white/8">{rec.año}</span>
         </div>
-        <p className="text-[11px] text-white/50 italic leading-snug line-clamp-2">{rec.razon}</p>
+        <p className="text-[11px] text-white/55 leading-snug line-clamp-2 italic">{rec.razon}</p>
         <div className="flex gap-2 mt-auto pt-0.5">
-          <a
-            href={jwUrl(rec.titulo)}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={onStart}
-            className="flex-1 rounded-xl bg-violet-600 hover:bg-violet-500 px-2 py-1.5 text-[11px] font-semibold text-white text-center transition"
-          >
+          <a href={jwUrl(rec.titulo)} target="_blank" rel="noopener noreferrer" onClick={onStart}
+            className="flex-1 rounded-xl bg-violet-600 hover:bg-violet-500 px-2 py-1.5 text-[11px] font-semibold text-white text-center transition">
             ▶ Ver esta
           </a>
           <button onClick={onSave}
-            className="px-2.5 py-1.5 rounded-xl bg-white/6 hover:bg-white/12 text-[11px] text-white/60 border border-white/8 transition">
+            className="px-2.5 py-1.5 rounded-xl bg-white/6 hover:bg-white/12 text-[11px] text-white/55 border border-white/8 transition">
             💾 Guardar
           </button>
         </div>
@@ -235,7 +239,7 @@ function RecCard({ rec, index, onStart, onSave }: {
   )
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Quick chips ───────────────────────────────────────────────────────────────
 
 const QUICK_CHIPS = [
   { label: 'Sorpréndeme', emoji: '🎲' },
@@ -243,8 +247,10 @@ const QUICK_CHIPS = [
   { label: 'Película corta', emoji: '⏱️' },
   { label: 'Serie para engancharme', emoji: '📺' },
   { label: 'Algo de España', emoji: '🇪🇸' },
-  { label: 'Menos de 90min', emoji: '⚡' },
+  { label: 'Menos de 90 min', emoji: '⚡' },
 ]
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 interface Props {
   content: Content[]
@@ -259,6 +265,7 @@ export function ContentSommelier({ content, todayMood, hour, isNight }: Props) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [welcomed, setWelcomed] = useState(false)
+  const [lastRequest, setLastRequest] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -275,6 +282,8 @@ export function ContentSommelier({ content, todayMood, hour, isNight }: Props) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
+  // ── Welcome ────────────────────────────────────────────────────────────────
+
   const generateWelcome = useCallback(async () => {
     if (welcomed || loading) return
     setWelcomed(true)
@@ -286,22 +295,19 @@ export function ContentSommelier({ content, todayMood, hour, isNight }: Props) {
       const streak = streakInfo(content)
 
       const prompt = `Eres el sommelier de contenido personal de Daniel (35 años, España).
-Contexto: Son las ${hour}h. Su mood hoy es ${todayMood ? `${todayMood}/5` : 'desconocido'}.
-Últimas vistas: ${lastStr}.
-${streak}
+Son las ${hour}h. Mood hoy: ${todayMood ? `${todayMood}/5` : 'sin dato'}.
+Últimas vistas: ${lastStr}. ${streak}
 
-Genera un saludo de exactamente 2 frases que:
-1. Mencione algo específico de su historial reciente
-2. Haga una sugerencia de tipo de contenido para esta noche o le invite a decirte qué le apetece
+Escribe exactamente 2 frases en español:
+- Frase 1: algo concreto sobre su historial reciente (menciona un título o patrón de lo que ha visto)
+- Frase 2: una sugerencia de tipo de contenido para esta noche o invítale a que te diga qué le apetece
 
-Tono: cercano, como un amigo cinéfilo. En español.
-No uses markdown, asteriscos, numeración ni ningún tipo de formato. Solo texto plano.
-Responde SOLO con las 2 frases, sin JSON, sin introducción.`
+Tono: amigo cinéfilo cercano. Sin formato, sin asteriscos, solo texto.`
 
-      const resp = await callAI(prompt, undefined, true, 500)
-      addMsg({ role: 'sommelier', text: cleanMarkdown(resp.trim()) })
+      const resp = await callAI(prompt, undefined, true, 300)
+      addMsg({ role: 'sommelier', text: cleanText(resp) })
     } catch {
-      addMsg({ role: 'sommelier', text: '¡Buenas noches! ¿Qué te apetece ver hoy? Puedo sorprenderte o ayudarte a elegir según tu estado de ánimo.' })
+      addMsg({ role: 'sommelier', text: `Buenas noches. ${lastWatched[0] ? `Vi que terminaste ${lastWatched[0].title}, buen gusto.` : '¿Qué te apetece esta noche?'} Dime qué te pide el cuerpo o pulsa uno de los chips de abajo.` })
     } finally {
       setLoading(false)
     }
@@ -312,55 +318,49 @@ Responde SOLO con las 2 frases, sin JSON, sin introducción.`
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collapsed])
 
-  const handleSend = async (text: string) => {
-    const trimmed = text.trim()
-    if (!trimmed || loading) return
-    setInput('')
-    addMsg({ role: 'user', text: trimmed })
-    setLoading(true)
+  // ── Send ───────────────────────────────────────────────────────────────────
 
+  const requestRecs = useCallback(async (text: string) => {
+    setLoading(true)
+    setLastRequest(text)
     try {
       const lastStr = lastWatched
         .map(c => `${c.title}${c.rating ? ` (${c.rating}/10)` : ''}`)
-        .join(', ') || 'nada reciente'
+        .join(', ') || 'sin historial'
 
-      const prompt = `Eres el sommelier de cine personal de Daniel.
-Perfil: Le gustan thrillers, documentales históricos (España s.XX, guerra civil, transición, franquismo), anime de culto, cine de autor, true crime, geopolítica. Plataformas: Netflix y Amazon Prime.
-Evita: romance, comedia romántica, superhéroes Marvel.
-Visto recientemente: ${lastStr}
-Petición de esta noche: '${trimmed}'
-Hora: ${hour}h · Mood: ${todayMood ? `${todayMood}/5` : 'sin dato'}
+      const prompt = `Eres el sommelier de cine personal de Daniel. Responde SOLO con el JSON, sin ningún texto antes ni después, sin bloques de código markdown.
 
-Recomienda exactamente 3 títulos. Para cada uno incluye:
-- Título exacto tal como aparece en Netflix/Prime/TMDB
-- Tipo: pelicula/serie/documental/anime
-- Plataforma disponible en España ahora mismo (si no estás seguro pon 'Buscar en JustWatch')
-- Duración en minutos (o min/episodio para series)
-- Una frase de máximo 12 palabras explicando por qué encaja con la petición
-- Año de estreno
+Perfil: thrillers, documental histórico (España s.XX, guerra civil, franquismo), anime de culto, cine de autor, true crime, geopolítica. Plataformas: Netflix y Amazon Prime. Evita: romance, comedia romántica, superhéroes Marvel.
+Historial: ${lastStr}
+Petición: "${text}"
+Contexto: ${hour}h, mood ${todayMood ?? '?'}/5
 
-No uses markdown, asteriscos ni formato en los textos del JSON. Solo texto plano.
-Responde SOLO con este JSON válido, sin texto extra ni bloques de código:
-{"respuesta":"frase del sommelier presentando las opciones, máx 15 palabras","recomendaciones":[{"titulo":"string","tituloOriginal":"string","tipo":"string","plataforma":"string","duracion":0,"año":0,"razon":"string"}]}`
+Devuelve exactamente este JSON con 3 recomendaciones reales y disponibles:
+{"intro":"Una frase tuya de máximo 10 palabras presentando las opciones","recs":[{"titulo":"título exacto","tituloOriginal":"título original","tipo":"pelicula|serie|documental|anime","plataforma":"Netflix|Amazon Prime|Buscar en JustWatch","duracion":90,"año":2020,"razon":"por qué encaja, máx 10 palabras"},{"titulo":"...","tituloOriginal":"...","tipo":"...","plataforma":"...","duracion":0,"año":0,"razon":"..."},{"titulo":"...","tituloOriginal":"...","tipo":"...","plataforma":"...","duracion":0,"año":0,"razon":"..."}]}`
 
-      const raw = await callAI(prompt, undefined, true, 1000)
-      const match = raw.match(/\{[\s\S]*\}/)
-      if (match) {
-        const parsed = JSON.parse(match[0]) as { respuesta: string; recomendaciones: SommelierRec[] }
-        addMsg({ role: 'sommelier', text: cleanMarkdown(parsed.respuesta) })
-        addMsg({
-          role: 'recs', text: '',
-          recs: parsed.recomendaciones.map(r => ({ ...r, razon: cleanMarkdown(r.razon) })),
-        })
+      const raw = await callAI(prompt, undefined, true, 2500)
+      const parsed = extractJson<{ intro: string; recs: SommelierRec[] }>(raw)
+
+      if (parsed?.recs?.length) {
+        addMsg({ role: 'sommelier', text: cleanText(parsed.intro || 'Aquí tienes mis recomendaciones para esta noche:') })
+        addMsg({ role: 'recs', intro: '', recs: parsed.recs.map(r => ({ ...r, razon: cleanText(r.razon) })) })
       } else {
-        addMsg({ role: 'sommelier', text: cleanMarkdown(raw.trim()) })
+        addMsg({ role: 'error', onRetry: () => requestRecs(text) })
       }
     } catch {
-      addMsg({ role: 'sommelier', text: 'Algo salió mal con la IA. Prueba de nuevo en un momento.' })
+      addMsg({ role: 'error', onRetry: () => requestRecs(text) })
     } finally {
       setLoading(false)
       setTimeout(() => inputRef.current?.focus(), 80)
     }
+  }, [lastWatched, hour, todayMood, addMsg])
+
+  const handleSend = (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed || loading) return
+    setInput('')
+    addMsg({ role: 'user', text: trimmed })
+    requestRecs(trimmed)
   }
 
   const saveRec = (rec: SommelierRec, status: 'pendiente' | 'viendo') => {
@@ -376,7 +376,8 @@ Responde SOLO con este JSON válido, sin texto extra ni bloques de código:
     }).catch(() => {})
   }
 
-  // ── Collapsed pill ──────────────────────────────────────────────────────────
+  // ── Collapsed ──────────────────────────────────────────────────────────────
+
   if (collapsed) {
     return (
       <motion.button
@@ -388,14 +389,15 @@ Responde SOLO con este JSON válido, sin texto extra ni bloques de código:
         <span className="text-xl">🎬</span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white/80">Sommelier de Contenido</p>
-          <p className="text-xs text-white/35">¿Qué veo esta noche? · Recomendaciones personalizadas con IA</p>
+          <p className="text-xs text-white/35">¿Qué veo esta noche? · IA personalizada</p>
         </div>
         <Sparkles size={14} className="text-violet-400 shrink-0 group-hover:text-violet-300 transition" />
       </motion.button>
     )
   }
 
-  // ── Expanded panel ──────────────────────────────────────────────────────────
+  // ── Expanded ───────────────────────────────────────────────────────────────
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -412,7 +414,7 @@ Responde SOLO con este JSON válido, sin texto extra ni bloques de código:
           </div>
           <div>
             <p className="text-sm font-semibold text-white/90">Sommelier de Contenido</p>
-            <p className="text-[11px] text-violet-300/60">IA personalizada · {hour}h</p>
+            <p className="text-[11px] text-violet-300/55">IA personalizada · {hour}h</p>
           </div>
         </div>
         <button onClick={() => setCollapsed(true)}
@@ -421,27 +423,49 @@ Responde SOLO con este JSON válido, sin texto extra ni bloques de código:
         </button>
       </div>
 
-      {/* Chat */}
+      {/* Chat area */}
       <div className="px-5 py-4 space-y-4 max-h-105 overflow-y-auto">
-        {messages.length === 0 && loading && <LoadingBubble />}
+        <AnimatePresence initial={false}>
+          {messages.length === 0 && loading && <LoadingBubble key="init-loading" />}
 
-        {messages.slice(-6).map(msg => {
-          if (msg.role === 'sommelier') return <SommelierBubble key={msg.id} text={msg.text} />
-          if (msg.role === 'user') return <UserBubble key={msg.id} text={msg.text} />
-          if (msg.role === 'recs') return (
-            <div key={msg.id} className="space-y-2.5">
-              {msg.recs.map((rec, i) => (
-                <RecCard key={i} rec={rec} index={i}
-                  onStart={() => saveRec(rec, 'viendo')}
-                  onSave={() => saveRec(rec, 'pendiente')}
-                />
-              ))}
-            </div>
-          )
-          return null
-        })}
+          {messages.slice(-8).map(msg => {
+            if (msg.role === 'sommelier') return (
+              <motion.div key={msg.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+                <SommelierBubble text={msg.text} />
+              </motion.div>
+            )
+            if (msg.role === 'user') return (
+              <motion.div key={msg.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+                <UserBubble text={msg.text} />
+              </motion.div>
+            )
+            if (msg.role === 'error') return (
+              <motion.div key={msg.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+                <ErrorBubble onRetry={() => {
+                  setMessages(prev => prev.filter(m => m.id !== msg.id))
+                  msg.onRetry()
+                }} />
+              </motion.div>
+            )
+            if (msg.role === 'recs') return (
+              <motion.div key={msg.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2.5">
+                {msg.recs.map((rec, i) => (
+                  <RecCard key={i} rec={rec} index={i}
+                    onStart={() => saveRec(rec, 'viendo')}
+                    onSave={() => saveRec(rec, 'pendiente')}
+                  />
+                ))}
+              </motion.div>
+            )
+            return null
+          })}
 
-        {loading && messages.length > 0 && <LoadingBubble />}
+          {loading && messages.length > 0 && (
+            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <LoadingBubble />
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div ref={bottomRef} />
       </div>
 
