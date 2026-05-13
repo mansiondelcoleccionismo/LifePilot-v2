@@ -18,10 +18,15 @@ export function AppShell() {
     setMobileMenuOpen(false)
   }, [pathname])
 
+  useEffect(() => {
+    document.body.style.overscrollBehavior = 'none'
+    return () => { document.body.style.overscrollBehavior = '' }
+  }, [])
+
   const sidebarWidth = sidebarCollapsed ? 64 : 240
 
   return (
-    <div className="min-h-dvh bg-[#09090E]">
+    <div className="min-h-dvh bg-[#09090E] overscroll-none touch-manipulation">
 
       {/* Sidebar desktop */}
       <Sidebar />

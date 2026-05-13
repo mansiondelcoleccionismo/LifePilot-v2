@@ -3,9 +3,24 @@
 
 html {
   scroll-behavior: smooth;
+  touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 * {
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  overflow-x: hidden;
+}
+
+input,
+textarea,
+select {
+  font-size: 16px !important;
 }
