@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { User, Key, Apple, Palette, Database, Save, Download, Loader2, Bell, Activity, Eye, EyeOff, Film, LogOut, RefreshCw } from 'lucide-react'
+import { User, Key, Apple, Palette, Database, Save, Download, Loader2, Bell, Activity, Eye, EyeOff, Film, LogOut, RefreshCw, CheckCircle, XCircle } from 'lucide-react'
 import { useAuthStore } from '@/store/auth.store'
 import { useGoogleAuth } from '@/hooks/useGoogleAuth'
+import { getICalUrl, saveICalUrl, testICalUrl } from '@/services/ical.service'
 import { DAY_TARGETS, type DayType, type MacroTarget } from '@/types/nutrition'
 import { getActiveKeyInfo, testGeminiKey, testGroqKey, clearCooldowns } from '@/services/ai.service'
 import {
@@ -298,6 +299,42 @@ export function AjustesPage() {
 
   const { user, logout } = useAuthStore()
   const { loginWithGoogle } = useGoogleAuth()
+
+  const [icalUrl, setIcalUrl]         = useState(() => getICalUrl())
+  const [icalTestState, setIcalTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
+  const [icalTestMsg, setIcalTestMsg] = useState('')
+
+  const handleSaveIcalUrl = () => {
+    saveICalUrl(icalUrl)
+    // Clear old cache so next load re-fetches
+    localStorage.removeItem('lifepilot_ical_cache')
+    setFeedback('URL de calendario guardada')
+    setTimeout(() => setFeedback(''), 2400)
+  }
+
+  const handleTestIcal = async () => {
+    const url = icalUrl.trim()
+    if (!url) return
+    setIcalTestState('testing')
+    setIcalTestMsg('')
+    const err = await testICalUrl(url)
+    if (err === null) {
+      setIcalTestState('ok')
+      setIcalTestMsg('Conexión correcta')
+    } else if (err.startsWith('Conectado')) {
+      setIcalTestState('ok')
+      setIcalTestMsg(err)
+    } else {
+      setIcalTestState('fail')
+      setIcalTestMsg(err)
+    }
+    setTimeout(() => setIcalTestState('idle'), 6000)
+  }
+
+  const maskedUrl = (url: string) => {
+    if (url.length < 30) return url
+    return url.slice(0, 28) + '…' + url.slice(-10)
+  }
 
   return (
     <div className="px-4 py-6 md:px-6 lg:px-8 max-w-4xl mx-auto">
@@ -905,6 +942,78 @@ export function AjustesPage() {
                 <p className="mt-1 text-xs text-white/40">{option.desc}</p>
               </button>
             ))}
+          </div>
+        </section>
+
+        {/* Calendario iCloud */}
+        <section className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 flex items-center justify-center">
+              <Apple size={20} className="text-cyan-300" />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">Sincronización</p>
+              <h2 className="text-lg font-semibold text-white/90 mt-1">📅 Calendario iCloud</h2>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {/* URL actual */}
+            <div>
+              <label className="block text-xs text-white/40 mb-1.5">URL pública del calendario</label>
+              <div className="flex gap-2">
+                <input
+                  value={icalUrl}
+                  onChange={e => setIcalUrl(e.target.value)}
+                  placeholder="https://p129-caldav.icloud.com/published/..."
+                  className="flex-1 h-10 px-3 rounded-xl bg-white/6 border border-white/8 text-white/70 text-sm placeholder:text-white/20 focus:outline-none focus:border-cyan-500/40 transition font-mono"
+                />
+                <button
+                  onClick={handleSaveIcalUrl}
+                  className="h-10 px-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-sm font-medium text-white transition shrink-0"
+                >
+                  <Save size={14} />
+                </button>
+              </div>
+              {icalUrl && (
+                <p className="text-[10px] text-white/25 mt-1 font-mono">{maskedUrl(icalUrl)}</p>
+              )}
+            </div>
+
+            {/* Test */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleTestIcal}
+                disabled={icalTestState === 'testing' || !icalUrl.trim()}
+                className="flex items-center gap-2 h-9 px-4 rounded-xl bg-white/6 border border-white/8 text-sm text-white/60 hover:text-white/80 hover:border-white/14 transition disabled:opacity-40"
+              >
+                {icalTestState === 'testing'
+                  ? <><Loader2 size={13} className="animate-spin" /> Probando...</>
+                  : <>Probar conexión</>
+                }
+              </button>
+              {icalTestState === 'ok' && (
+                <div className="flex items-center gap-1.5 text-emerald-400 text-sm">
+                  <CheckCircle size={14} /> {icalTestMsg}
+                </div>
+              )}
+              {icalTestState === 'fail' && (
+                <div className="flex items-center gap-1.5 text-rose-400 text-sm">
+                  <XCircle size={14} /> {icalTestMsg}
+                </div>
+              )}
+            </div>
+
+            {/* Instrucciones */}
+            <div className="rounded-2xl bg-white/3 border border-white/6 p-4">
+              <p className="text-xs font-semibold text-white/50 mb-2">Cómo obtener la URL</p>
+              <ol className="space-y-1 text-xs text-white/35 list-decimal list-inside">
+                <li>Abre la app <strong className="text-white/50">Calendario</strong> en iPhone</li>
+                <li>Mantén pulsado el calendario que quieres compartir</li>
+                <li>Toca <strong className="text-white/50">Compartir enlace</strong></li>
+                <li>Copia el enlace y pégalo arriba</li>
+              </ol>
+            </div>
           </div>
         </section>
 

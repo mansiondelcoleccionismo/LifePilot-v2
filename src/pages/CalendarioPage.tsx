@@ -12,8 +12,7 @@ import { db } from '@/lib/firebase'
 import {
   addCalendarEvent, deleteCalendarEvent, updateCalendarEvent,
 } from '@/services/calendar.service'
-import { getMonthEvents, type GCalEvent, TokenExpiredError } from '@/services/google-calendar.service'
-import { useAuthStore } from '@/store/auth.store'
+import { getMonthICalEvents, type ICalEvent } from '@/services/ical.service'
 import type { CalendarEvent, EventCategory, EventColor } from '@/types/event'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -82,15 +81,13 @@ export function CalendarioPage() {
   const [showPanel, setShowPanel] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  const { isLoggedIn } = useAuthStore()
-
   // Per-day data stores
   const [diaryByDay,     setDiaryByDay]     = useState<Record<string, DiaryEntry>>({})
   const [exerciseByDay,  setExerciseByDay]  = useState<Record<string, ExSet[]>>({})
   const [nutritionByDay, setNutritionByDay] = useState<Record<string, FoodEntry[]>>({})
   const [tasksByDay,     setTasksByDay]     = useState<Record<string, TaskItem[]>>({})
   const [eventsByDay,    setEventsByDay]    = useState<Record<string, CalendarEvent[]>>({})
-  const [gCalByDay,      setGCalByDay]      = useState<Record<string, GCalEvent[]>>({})
+  const [icalByDay,      setIcalByDay]      = useState<Record<string, ICalEvent[]>>({})
 
   // Day-detail medication state
   const [meds,    setMeds]    = useState<MedItem[]>([])
@@ -196,19 +193,18 @@ export function CalendarioPage() {
     })
   }, [monthKey])
 
-  // ── Google Calendar events for month ──────────────────────────────────────
+  // ── iCloud Calendar events for month ──────────────────────────────────────
   useEffect(() => {
-    if (!isLoggedIn) return
-    getMonthEvents(year, month).then(events => {
-      const map: Record<string, GCalEvent[]> = {}
+    getMonthICalEvents(year, month).then(events => {
+      const map: Record<string, ICalEvent[]> = {}
       for (const ev of events) {
-        const day = ev.start.slice(0, 10)
+        const day = ev.start.toISOString().slice(0, 10)
         if (!map[day]) map[day] = []
         map[day].push(ev)
       }
-      setGCalByDay(map)
-    }).catch((err) => { if (!(err instanceof TokenExpiredError)) console.error(err) })
-  }, [year, month, isLoggedIn])
+      setIcalByDay(map)
+    }).catch(() => {})
+  }, [year, month])
 
   // ── Load medications for selected day ─────────────────────────────────────
   useEffect(() => {
@@ -263,7 +259,7 @@ export function CalendarioPage() {
   const selNut        = selectedDay ? (nutritionByDay[selectedDay] ?? []) : []
   const selTasks      = selectedDay ? (tasksByDay[selectedDay] ?? [])     : []
   const selEvents     = selectedDay ? (eventsByDay[selectedDay] ?? [])    : []
-  const selGCalEvents = selectedDay ? (gCalByDay[selectedDay] ?? [])      : []
+  const selIcal       = selectedDay ? (icalByDay[selectedDay] ?? [])      : []
 
   const selMoodCfg  = selDiary ? MOOD_CFG.find(m => m.v === selDiary.mood) : undefined
   const nutTotals   = selNut.reduce((a, f) => ({ kcal: a.kcal + f.kcal, protein: a.protein + f.protein, carbs: a.carbs + f.carbs, fat: a.fat + f.fat }), { kcal: 0, protein: 0, carbs: 0, fat: 0 })
@@ -414,17 +410,16 @@ export function CalendarioPage() {
 
       {/* Events */}
       <Section icon={<Calendar size={14} className="text-cyan-400" />} title="Eventos">
-        {(selGCalEvents.length > 0 || selEvents.length > 0) ? (
+        {(selIcal.length > 0 || selEvents.length > 0) ? (
           <div className="space-y-2">
-            {/* Google Calendar events */}
-            {selGCalEvents.map(ev => {
-              const time = ev.allDay ? '' : new Date(ev.start).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+            {/* iCloud Calendar events */}
+            {selIcal.map(ev => {
+              const time = ev.isAllDay ? '' : ev.start.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
               return (
                 <div key={ev.id} className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+                  <span className="text-xs shrink-0 leading-none">🍎</span>
                   <span className="text-sm text-white/70 flex-1 truncate">{ev.title}</span>
                   {time && <span className="text-xs text-white/35 shrink-0">{time}</span>}
-                  <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/15 text-blue-400/70 shrink-0">G</span>
                 </div>
               )
             })}

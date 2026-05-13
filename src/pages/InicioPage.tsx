@@ -1,14 +1,17 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, CheckSquare, TrendingUp, Flame, Calendar, RefreshCw, Loader2, AlertCircle } from 'lucide-react'
+import { Sparkles, CheckSquare, TrendingUp, Flame, Calendar, RefreshCw, Loader2 } from 'lucide-react'
 import { useTasks } from '@/hooks/useTasks'
 import { useToday } from '@/hooks/useToday'
 import { subscribeNutritionEntries } from '@/services/nutrition.service'
 import { subscribeCalendarEvents } from '@/services/calendar.service'
 import { subscribeDiaryEntries } from '@/services/diary.service'
 import { subscribeAssets, calculateTotal } from '@/services/wealth.service'
-import { getTodayEvents, type GCalEvent, TokenExpiredError } from '@/services/google-calendar.service'
+import {
+  fetchICalEvents, getTodayICalEvents, getUpcomingICalEvents,
+  getLastSyncTime, type ICalEvent,
+} from '@/services/ical.service'
 import { useAuthStore } from '@/store/auth.store'
 import { MedicationWidget } from '@/components/MedicationWidget'
 import { WeeklyReport } from '@/components/WeeklyReport'
@@ -121,11 +124,13 @@ export function InicioPage() {
   const { today, greeting } = useToday()
   const navigate = useNavigate()
   const { loadWeights, lastWeight, delta } = useWeights()
-  const { isLoggedIn, logout } = useAuthStore()
+  const { isLoggedIn } = useAuthStore()
   const [nutritionEntries, setNutritionEntries] = useState<FoodEntry[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
-  const [gCalEvents, setGCalEvents] = useState<GCalEvent[]>([])
-  const [gCalError, setGCalError] = useState<'expired' | null>(null)
+  const [icalToday, setIcalToday]       = useState<ICalEvent[]>([])
+  const [icalUpcoming, setIcalUpcoming] = useState<ICalEvent[]>([])
+  const [icalSynced, setIcalSynced]     = useState<Date | null>(null)
+  const [icalLoading, setIcalLoading]   = useState(false)
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([])
   const [assets, setAssets] = useState<Asset[]>([])
   const [loading, setLoading] = useState(true)
@@ -196,16 +201,32 @@ export function InicioPage() {
     return () => { unsubNutrition(); unsubEvents(); unsubDiary() }
   }, [currentMonthKey])
 
+  const loadIcal = async (force = false) => {
+    setIcalLoading(true)
+    try {
+      await fetchICalEvents(force)
+      const [today, upcoming] = await Promise.all([
+        getTodayICalEvents(),
+        getUpcomingICalEvents(3),
+      ])
+      setIcalToday(today)
+      // upcoming = next 3 days, exclude today
+      const todayS = new Date().toISOString().slice(0, 10)
+      setIcalUpcoming(upcoming.filter(e => e.start.toISOString().slice(0, 10) !== todayS))
+      setIcalSynced(getLastSyncTime())
+    } catch {
+      setIcalSynced(getLastSyncTime())
+    } finally {
+      setIcalLoading(false)
+    }
+  }
+
   useEffect(() => {
-    if (!isLoggedIn) return
-    setGCalError(null)
-    const load = () => getTodayEvents()
-      .then(evs => { setGCalEvents(evs); setGCalError(null) })
-      .catch(err => { if (err instanceof TokenExpiredError) setGCalError('expired') })
-    load()
-    const id = setInterval(load, 5 * 60_000)
+    loadIcal()
+    const id = setInterval(() => loadIcal(), 15 * 60_000)
     return () => clearInterval(id)
-  }, [isLoggedIn])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function fetchBriefing() {
     if (!hasAnyAIKey()) return
@@ -529,46 +550,51 @@ Responde SOLO con este JSON sin texto adicional ni markdown:
 
         {/* Eventos */}
         <Card className="md:col-span-2">
+          {/* Header con indicador de sync */}
           <div className="flex items-center gap-2 mb-3">
             <Calendar size={14} className="text-cyan-400" />
             <Label>Agenda de hoy</Label>
+            <div className="ml-auto flex items-center gap-2">
+              {icalSynced && !icalLoading && (
+                <div className="flex items-center gap-1">
+                  <motion.div
+                    className="w-1.5 h-1.5 rounded-full bg-emerald-400"
+                    animate={{ opacity: [1, 0.4, 1] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  />
+                  <span className="text-[10px] text-white/25">
+                    {icalSynced.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              )}
+              <button
+                onClick={() => loadIcal(true)}
+                disabled={icalLoading}
+                className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition disabled:opacity-40"
+              >
+                <RefreshCw size={11} className={`text-white/40 ${icalLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
           </div>
 
-          {/* Token expirado */}
-          {gCalError === 'expired' && (
-            <div className="flex items-center gap-2 mb-3 p-2.5 rounded-xl bg-amber-500/8 border border-amber-500/20">
-              <AlertCircle size={13} className="text-amber-400 shrink-0" />
-              <p className="text-xs text-white/50 flex-1">Token de Google expirado</p>
-              <button onClick={logout} className="text-xs text-amber-400 hover:text-amber-300 transition">Reconectar</button>
-            </div>
-          )}
-
-          {/* No conectado */}
-          {!isLoggedIn && (
-            <p className="text-sm text-white/30 mb-2">
-              <button onClick={() => navigate('ajustes')} className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition">Conecta Google Calendar</button>
-              {' '}para ver tu agenda aquí
-            </p>
-          )}
-
-          <div className="space-y-2">
-            {/* Google Calendar events */}
-            {gCalEvents.map((ev) => {
-              const time = ev.allDay ? '' : new Date(ev.start).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+          {/* Eventos iCloud de hoy */}
+          <div className="space-y-1.5 mb-3">
+            {icalToday.map((ev) => {
+              const time = ev.isAllDay ? '' : ev.start.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
               return (
-                <div key={ev.id} className="flex items-center gap-3 p-2 rounded-lg bg-blue-500/4 border border-blue-500/10">
-                  <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+                <div key={ev.id} className="flex items-center gap-2.5 p-2 rounded-lg bg-cyan-500/4 border border-cyan-500/10">
+                  <span className="text-sm leading-none shrink-0">🍎</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-white/80 truncate">{ev.title}</p>
-                    {time && <p className="text-xs text-white/40">{time}</p>}
+                    {ev.location && <p className="text-[10px] text-white/35 truncate">{ev.location}</p>}
                   </div>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/12 text-blue-400/60 border border-blue-500/15 shrink-0">GCal</span>
+                  {time && <span className="text-xs text-white/40 shrink-0">{time}</span>}
                 </div>
               )
             })}
-            {/* Local events */}
+            {/* Eventos locales de Firebase */}
             {todayEvents.map((event) => (
-              <div key={event.id} className="flex items-center gap-3 p-2 rounded-lg bg-white/2 border border-white/4">
+              <div key={event.id} className="flex items-center gap-2.5 p-2 rounded-lg bg-white/2 border border-white/4">
                 <div className={`w-2 h-2 rounded-full shrink-0 ${
                   event.category === 'trabajo'  ? 'bg-blue-400'   :
                   event.category === 'personal' ? 'bg-purple-400' :
@@ -581,13 +607,36 @@ Responde SOLO con este JSON sin texto adicional ni markdown:
                 </div>
               </div>
             ))}
-            {isLoggedIn && gCalError !== 'expired' && gCalEvents.length === 0 && todayEvents.length === 0 && (
-              <p className="text-sm text-white/30">Sin eventos en Google Calendar hoy</p>
+            {icalToday.length === 0 && todayEvents.length === 0 && !icalLoading && (
+              <p className="text-sm text-white/30">Sin eventos hoy ✓</p>
             )}
-            {!isLoggedIn && todayEvents.length === 0 && (
-              <p className="text-sm text-white/30">Sin eventos locales para hoy</p>
+            {icalLoading && icalToday.length === 0 && (
+              <div className="flex items-center gap-2 text-xs text-white/30">
+                <div className="w-3 h-3 rounded-full border border-white/20 border-t-cyan-400 animate-spin" />
+                Sincronizando calendario...
+              </div>
             )}
           </div>
+
+          {/* Próximos días */}
+          {icalUpcoming.length > 0 && (
+            <>
+              <p className="text-[10px] font-semibold tracking-widest uppercase text-white/25 mb-2">Próximos</p>
+              <div className="space-y-1.5">
+                {icalUpcoming.slice(0, 5).map((ev) => {
+                  const dayLabel = ev.start.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
+                  const time     = ev.isAllDay ? '' : ev.start.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+                  return (
+                    <div key={ev.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg bg-white/2">
+                      <span className="text-xs shrink-0">🍎</span>
+                      <span className="text-xs text-white/50 truncate flex-1">{ev.title}</span>
+                      <span className="text-[10px] text-white/30 shrink-0">{dayLabel}{time ? ` · ${time}` : ''}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
         </Card>
 
       </motion.div>
