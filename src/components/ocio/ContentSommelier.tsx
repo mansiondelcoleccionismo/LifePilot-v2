@@ -27,7 +27,19 @@ type ChatMsg = ChatMsgInput & { id: string }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function useTypewriter(text: string, speed = 14) {
+function cleanMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/_{1,2}(.+?)_{1,2}/g, '$1')
+    .replace(/#{1,6}\s*/g, '')
+    .replace(/^---+$/gm, '')
+    .replace(/^\s*[-•]\s+/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function useTypewriter(text: string, speed = 8) {
   const [displayed, setDisplayed] = useState('')
   useEffect(() => {
     setDisplayed('')
@@ -278,16 +290,16 @@ Contexto: Son las ${hour}h. Su mood hoy es ${todayMood ? `${todayMood}/5` : 'des
 Últimas vistas: ${lastStr}.
 ${streak}
 
-Genera un saludo de máximo 2 frases que:
+Genera un saludo de exactamente 2 frases que:
 1. Mencione algo específico de su historial reciente
-2. Haga una sugerencia de tipo de contenido para esta noche
-3. Le invite a decirte qué le apetece o que le sorprendas
+2. Haga una sugerencia de tipo de contenido para esta noche o le invite a decirte qué le apetece
 
 Tono: cercano, como un amigo cinéfilo. En español.
-Responde SOLO con el texto del mensaje, sin JSON.`
+No uses markdown, asteriscos, numeración ni ningún tipo de formato. Solo texto plano.
+Responde SOLO con las 2 frases, sin JSON, sin introducción.`
 
-      const resp = await callAI(prompt, undefined, true)
-      addMsg({ role: 'sommelier', text: resp.trim() })
+      const resp = await callAI(prompt, undefined, true, 500)
+      addMsg({ role: 'sommelier', text: cleanMarkdown(resp.trim()) })
     } catch {
       addMsg({ role: 'sommelier', text: '¡Buenas noches! ¿Qué te apetece ver hoy? Puedo sorprenderte o ayudarte a elegir según tu estado de ánimo.' })
     } finally {
@@ -327,17 +339,21 @@ Recomienda exactamente 3 títulos. Para cada uno incluye:
 - Una frase de máximo 12 palabras explicando por qué encaja con la petición
 - Año de estreno
 
-Responde SOLO con este JSON válido, sin texto extra:
+No uses markdown, asteriscos ni formato en los textos del JSON. Solo texto plano.
+Responde SOLO con este JSON válido, sin texto extra ni bloques de código:
 {"respuesta":"frase del sommelier presentando las opciones, máx 15 palabras","recomendaciones":[{"titulo":"string","tituloOriginal":"string","tipo":"string","plataforma":"string","duracion":0,"año":0,"razon":"string"}]}`
 
-      const raw = await callAI(prompt, undefined, true)
+      const raw = await callAI(prompt, undefined, true, 1000)
       const match = raw.match(/\{[\s\S]*\}/)
       if (match) {
         const parsed = JSON.parse(match[0]) as { respuesta: string; recomendaciones: SommelierRec[] }
-        addMsg({ role: 'sommelier', text: parsed.respuesta })
-        addMsg({ role: 'recs', text: '', recs: parsed.recomendaciones })
+        addMsg({ role: 'sommelier', text: cleanMarkdown(parsed.respuesta) })
+        addMsg({
+          role: 'recs', text: '',
+          recs: parsed.recomendaciones.map(r => ({ ...r, razon: cleanMarkdown(r.razon) })),
+        })
       } else {
-        addMsg({ role: 'sommelier', text: raw.trim() })
+        addMsg({ role: 'sommelier', text: cleanMarkdown(raw.trim()) })
       }
     } catch {
       addMsg({ role: 'sommelier', text: 'Algo salió mal con la IA. Prueba de nuevo en un momento.' })

@@ -103,6 +103,7 @@ async function callGeminiModel(
   model: string,
   prompt: string,
   imageData?: { data: string; mimeType: string },
+  maxTokens = 1000,
 ): Promise<string> {
   const parts: object[] = []
   if (imageData) parts.push({ inlineData: { mimeType: imageData.mimeType, data: imageData.data } })
@@ -115,7 +116,7 @@ async function callGeminiModel(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 1000 },
+        generationConfig: { temperature: 0.4, maxOutputTokens: maxTokens },
       }),
     },
   )
@@ -138,11 +139,12 @@ async function callGemini(
   key: string,
   prompt: string,
   imageData?: { data: string; mimeType: string },
+  maxTokens = 1000,
 ): Promise<string> {
   let lastErr: unknown
   for (const model of GEMINI_MODELS) {
     try {
-      return await callGeminiModel(key, model, prompt, imageData)
+      return await callGeminiModel(key, model, prompt, imageData, maxTokens)
     } catch (err) {
       if (err instanceof RateLimitError) throw err
       lastErr = err
@@ -151,7 +153,7 @@ async function callGemini(
   throw lastErr
 }
 
-async function callGroq(key: string, prompt: string): Promise<string> {
+async function callGroq(key: string, prompt: string, maxTokens = 1024): Promise<string> {
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -162,6 +164,7 @@ async function callGroq(key: string, prompt: string): Promise<string> {
       model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
+      max_tokens: maxTokens,
     }),
   })
 
@@ -177,6 +180,7 @@ export async function callAI(
   prompt: string,
   imageData?: { data: string; mimeType: string },
   skipContext = false,
+  maxTokens = 1000,
 ): Promise<string> {
   const context = skipContext ? '' : buildAIContext()
   const fullPrompt = context ? context + prompt : prompt
@@ -186,7 +190,7 @@ export async function callAI(
     const keyId = `gemini_${i}`
     if (isOnCooldown(keyId)) continue
     try {
-      return await callGemini(geminiKeys[i], fullPrompt, imageData)
+      return await callGemini(geminiKeys[i], fullPrompt, imageData, maxTokens)
     } catch (err) {
       if (err instanceof RateLimitError) { setCooldown(keyId); continue }
       throw err
@@ -200,7 +204,7 @@ export async function callAI(
       const keyId = `groq_${i}`
       if (isOnCooldown(keyId)) continue
       try {
-        return await callGroq(groqKeys[i], fullPrompt)
+        return await callGroq(groqKeys[i], fullPrompt, maxTokens)
       } catch (err) {
         if (err instanceof RateLimitError) { setCooldown(keyId); continue }
         throw err
