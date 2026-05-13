@@ -19,6 +19,7 @@ import {
 } from '@/services/tmdb.service'
 import { getOcioRecommendations } from '@/services/ai.service'
 import type { OcioRecommendation } from '@/services/ai.service'
+import { ContentSommelier } from '@/components/ocio/ContentSommelier'
 import type { TmdbResult } from '@/services/tmdb.service'
 import { collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -1312,9 +1313,9 @@ export function OcioPage() {
         </div>
       </motion.div>
 
-      {/* Modo Noche */}
-      {isNight && !loading && (
-        <ModoNoche content={content} todayMood={todayMood} hour={hour} />
+      {/* Sommelier de Contenido */}
+      {!loading && (
+        <ContentSommelier content={content} todayMood={todayMood} hour={hour} isNight={isNight} />
       )}
 
       {/* Tabs */}
