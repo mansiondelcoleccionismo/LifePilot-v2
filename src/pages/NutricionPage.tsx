@@ -148,30 +148,7 @@ INSTRUCCIONES ESTRICTAS:
 Responde ÚNICAMENTE con JSON sin texto adicional:
 {"descripcion":"nombre del plato","gramos_totales":0,"kcal":0,"protein":0,"carbs":0,"fat":0,"desglose":[{"nombre":"ingrediente","gramos":0,"kcal":0,"protein":0,"carbs":0,"fat":0}]}`
 
-      let responseText = ''
-
-      // Try Groq first (faster, more reliable for structured JSON)
-      const groqKey = localStorage.getItem('lifepilot_groq_key_1')?.trim() ?? ''
-      if (groqKey) {
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.1,
-          }),
-        })
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({})) as { error?: { message?: string } }
-          const detail = body?.error?.message ?? `HTTP ${res.status}`
-          throw new Error(`Groq: ${detail}`)
-        }
-        const data = await res.json()
-        responseText = data?.choices?.[0]?.message?.content ?? ''
-      } else {
-        responseText = await callAI(prompt, undefined, true)
-      }
+      const responseText = await callAI(prompt, undefined, true)
 
       console.log('Respuesta IA raw:', responseText)
 
