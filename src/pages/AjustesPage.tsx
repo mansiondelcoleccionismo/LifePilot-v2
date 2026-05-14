@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { User, Key, Apple, Palette, Database, Save, Download, Loader2, Bell, Activity, Eye, EyeOff, Film, LogOut, RefreshCw, CheckCircle, XCircle } from 'lucide-react'
+import { User, Key, Apple, Palette, Database, Save, Download, Loader2, Bell, Activity, Eye, EyeOff, Film, LogOut, RefreshCw, CheckCircle, XCircle, Droplets } from 'lucide-react'
+import { getBaseHydrationTarget, setBaseHydrationTarget } from '@/services/hydration.service'
 import { useAuthStore } from '@/store/auth.store'
 import { useGoogleAuth } from '@/hooks/useGoogleAuth'
 import { getICalUrl, saveICalUrl, testICalUrl } from '@/services/ical.service'
@@ -109,6 +110,7 @@ export function AjustesPage() {
   const [theme, setTheme] = useState<ThemeType>('oscuro')
   const [feedback, setFeedback] = useState('')
   const [metabolicProfile, setMetabolicProfile] = useState<UserProfile>(() => loadProfile())
+  const [hydrationBase, setHydrationBase] = useState(() => getBaseHydrationTarget())
 
   useEffect(() => {
     // Load profile
@@ -780,6 +782,58 @@ export function AjustesPage() {
             >
               Restablecer
             </button>
+          </div>
+        </section>
+
+        {/* Hidratación */}
+        <section className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 flex items-center justify-center">
+              <Droplets size={20} className="text-cyan-300" />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">Hidratación</p>
+              <h2 className="text-lg font-semibold text-white/90 mt-1">Objetivo de agua diario</h2>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-white/3 border border-white/6 p-4">
+              <label className="block text-sm font-medium text-white/70 mb-1">
+                Vasos base por día
+              </label>
+              <p className="text-xs text-white/35 mb-3">
+                En días de entreno o pádel se ajusta automáticamente (hasta +2 vasos).
+              </p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min="4"
+                  max="20"
+                  value={hydrationBase}
+                  onChange={e => setHydrationBase(Number(e.target.value))}
+                  className="w-20 rounded-xl bg-white/6 border border-white/10 px-3 py-2 text-sm text-white text-center focus:outline-none focus:border-cyan-500/50 transition"
+                />
+                <span className="text-sm text-white/45">vasos (4–20)</span>
+                <button
+                  onClick={() => {
+                    setBaseHydrationTarget(hydrationBase)
+                    setFeedback('Objetivo de hidratación guardado')
+                    setTimeout(() => setFeedback(''), 2400)
+                  }}
+                  className="ml-auto inline-flex items-center gap-2 rounded-2xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-500"
+                >
+                  <Save size={14} /> Guardar
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-cyan-900/15 border border-cyan-500/15 px-4 py-3">
+              <p className="text-xs text-cyan-300/70">
+                💡 El widget de hidratación en Inicio se actualiza automáticamente.
+                Los vasos se reinician a medianoche cada día.
+              </p>
+            </div>
           </div>
         </section>
 

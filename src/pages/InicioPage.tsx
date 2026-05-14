@@ -1,11 +1,13 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { RefreshCw, Loader2, ChevronRight, Check } from 'lucide-react'
+import { RefreshCw, Loader2, ChevronRight, Check, Scale } from 'lucide-react'
 import { useAuthStore } from '@/store/auth.store'
 import { useTasks } from '@/hooks/useTasks'
 import { useWeights } from '@/features/health/useWeights'
 import { subscribeNutritionEntries } from '@/services/nutrition.service'
+import { HydrationWidget } from '@/components/HydrationWidget'
+import { patchContext } from '@/services/context.service'
 import {
   subscribeMedications, subscribeDayLogs, toggleMedicationTaken,
 } from '@/services/medication.service'
@@ -96,7 +98,7 @@ export function InicioPage() {
 
   // ── Firebase / async state ────────────────────────────────────────────────
   const { tasks, loading: tasksLoading } = useTasks()
-  const { loadWeights, lastWeight }      = useWeights()
+  const { loadWeights, lastWeight, weights, addWeight } = useWeights()
 
   const [nutritionEntries, setNutritionEntries] = useState<FoodEntry[]>([])
   const [medications, setMedications]           = useState<Medication[]>([])
@@ -109,6 +111,9 @@ export function InicioPage() {
   const [weather, setWeather]                   = useState<WeatherData | null>(null)
   const [briefing, setBriefing]                 = useState('')
   const [briefingLoading, setBriefingLoading]   = useState(false)
+  const [quickWeight, setQuickWeight]           = useState('')
+  const [savingWeight, setSavingWeight]         = useState(false)
+  const [weightSaved, setWeightSaved]           = useState(false)
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const pendingTasks = useMemo(() => tasks.filter(t => !t.completed), [tasks])
@@ -157,6 +162,14 @@ export function InicioPage() {
     return pills
   }, [lastWeight, streak, todayMood])
 
+  // Show quick weight card on Mon/Thu if no weight logged in last 7 days
+  const showWeightCard = useMemo(() => {
+    if (![1, 4].includes(dow)) return false
+    if (weightSaved) return false
+    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
+    return !weights.some(w => w.date >= weekAgo)
+  }, [dow, weights, weightSaved])
+
   // ── Effects ───────────────────────────────────────────────────────────────
   useEffect(() => {
     loadWeights()
@@ -186,6 +199,34 @@ export function InicioPage() {
     const id = setInterval(() => loadIcal(), 15 * 60_000)
     return () => clearInterval(id)
   }, [loadIcal])
+
+  // Sync live data into global AI context
+  useEffect(() => {
+    patchContext({
+      kcalConsumed:        todayNutrition.calories,
+      proteinConsumed:     todayNutrition.protein,
+      carbsConsumed:       todayNutrition.carbs,
+      fatConsumed:         todayNutrition.fat,
+      medicationCompliance: medsTotal > 0 ? Math.round((medsTaken / medsTotal) * 100) : 0,
+      tasksCompleted:      tasks.filter(t => t.completed).length,
+      tasksPending:        pendingTasks.length,
+      streakCurrent:       streak,
+      ...(todayMood != null ? { mood: todayMood } : {}),
+    })
+  }, [todayNutrition, medsTaken, medsTotal, tasks, pendingTasks.length, streak, todayMood])
+
+  const handleSaveWeight = useCallback(async () => {
+    const val = parseFloat(quickWeight.replace(',', '.'))
+    if (isNaN(val) || val < 30 || val > 300) return
+    setSavingWeight(true)
+    try {
+      await addWeight(val)
+      setWeightSaved(true)
+      setQuickWeight('')
+    } finally {
+      setSavingWeight(false)
+    }
+  }, [quickWeight, addWeight])
 
   const fetchBriefing = useCallback(async () => {
     if (!hasAnyAIKey()) return
@@ -386,7 +427,7 @@ export function InicioPage() {
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.13, duration: 0.28 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-4"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
       >
         {/* Medicación */}
         <div className={`rounded-2xl border p-5 transition-colors duration-500 ${
@@ -517,6 +558,9 @@ export function InicioPage() {
             </>
           )}
         </div>
+
+        {/* Hidratación */}
+        <HydrationWidget />
       </motion.div>
 
       {/* ══════════════════════════════════════════════════════════════════
@@ -539,6 +583,51 @@ export function InicioPage() {
               <span className="text-xs font-medium text-white/65">{pill.text}</span>
             </div>
           ))}
+        </motion.div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          BONUS — REGISTRO RÁPIDO DE PESO (Lun / Jue si no hay peso esta semana)
+          ══════════════════════════════════════════════════════════════ */}
+      {showWeightCard && (
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.22, duration: 0.28 }}
+          className="rounded-2xl bg-indigo-950/30 border border-indigo-500/20 p-5"
+        >
+          <div className="flex items-center gap-2.5 mb-3">
+            <Scale size={16} className="text-indigo-300 shrink-0" />
+            <p className="text-sm font-semibold text-white/80">Registra tu peso de hoy</p>
+          </div>
+          <p className="text-xs text-white/35 mb-4">
+            No has registrado ningún peso esta semana. Un minuto ahora, datos clave para tu progreso.
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="Ej: 82.5"
+              value={quickWeight}
+              onChange={e => setQuickWeight(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSaveWeight()}
+              className="flex-1 rounded-xl bg-white/6 border border-white/10 px-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-indigo-500/50 transition"
+            />
+            <button
+              onClick={handleSaveWeight}
+              disabled={savingWeight || !quickWeight}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-sm font-semibold text-white transition flex items-center gap-1.5"
+            >
+              {savingWeight ? <Loader2 size={13} className="animate-spin" /> : null}
+              Guardar
+            </button>
+            <button
+              onClick={() => setWeightSaved(true)}
+              className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/8 text-xs text-white/40 transition"
+            >
+              Ahora no
+            </button>
+          </div>
         </motion.div>
       )}
 
