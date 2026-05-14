@@ -368,6 +368,12 @@ export function PatrimonioPage() {
   const [scanError, setScanError]         = useState<string | null>(null)
   const fileInputRef                      = useRef<HTMLInputElement>(null)
 
+  // Sheets import state
+  const [importMode, setImportMode]   = useState<'sheets' | 'image'>('sheets')
+  const [sheetsUrl, setSheetsUrl]     = useState(() => localStorage.getItem('lifepilot_sheets_url') ?? '')
+  const [sheetsLoading, setSheetsLoading] = useState(false)
+  const [sheetsError, setSheetsError] = useState<string | null>(null)
+
   // Add/edit asset modal state
   const [formNombre, setFormNombre]       = useState('')
   const [formPlataforma, setFormPlataforma] = useState('')
@@ -436,7 +442,76 @@ export function PatrimonioPage() {
     assets.forEach(a => { init[a.id] = String(a.valor) })
     setCaptureValues(init)
     setScanError(null)
+    setSheetsError(null)
     setActiveModal('capture')
+  }
+
+  // ── Sheets helpers ────────────────────────────────────────────────────────
+
+  function extractSheetId(url: string): string | null {
+    const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+    return m?.[1] ?? null
+  }
+
+  function parseSimpleCSV(csv: string): string[][] {
+    return csv.split('\n').filter(l => l.trim()).map(line => {
+      const row: string[] = []
+      let cell = '', inQ = false
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i]
+        if (ch === '"') { if (inQ && line[i + 1] === '"') { cell += '"'; i++ } else inQ = !inQ }
+        else if (ch === ',' && !inQ) { row.push(cell.trim()); cell = '' }
+        else cell += ch
+      }
+      row.push(cell.trim())
+      return row
+    })
+  }
+
+  async function handleSheetsSync() {
+    const url = sheetsUrl.trim()
+    if (!url) { setSheetsError('Pega la URL de tu Google Sheets'); return }
+    const sheetId = extractSheetId(url)
+    if (!sheetId) { setSheetsError('URL no válida — copia la URL completa de Google Sheets'); return }
+    setSheetsLoading(true); setSheetsError(null)
+    try {
+      const res = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`)
+      if (!res.ok) throw new Error(`Error ${res.status} — Verifica que la hoja esté compartida como "Cualquiera con el enlace"`)
+      const csv = await res.text()
+      const rows = parseSimpleCSV(csv)
+      if (rows.length < 2) throw new Error('La hoja está vacía o no contiene datos')
+
+      const headers = rows[0].map(h => h.toLowerCase().replace(/['"]/g, '').trim())
+      const findCol = (...names: string[]) => headers.findIndex(h => names.some(n => h.includes(n)))
+      const nombreCol = findCol('nombre', 'activo', 'name', 'asset', 'producto')
+      const valorCol  = findCol('valor', 'value', 'importe', 'saldo', 'precio', 'cantidad')
+
+      if (nombreCol < 0 || valorCol < 0) {
+        throw new Error(`No se encontraron columnas "Nombre" y "Valor". Cabeceras detectadas: ${rows[0].join(', ')}`)
+      }
+
+      const newValues = { ...captureValues }
+      let matched = 0
+      rows.slice(1).forEach(row => {
+        const nombre = row[nombreCol]?.trim()
+        const raw = row[valorCol]?.trim().replace(/[€$£\s]/g, '').replace(/,(?=\d{3})/g, '').replace(',', '.')
+        const valor = parseFloat(raw)
+        if (!nombre || isNaN(valor) || valor <= 0) return
+        const asset = assets.find(a =>
+          a.nombre.toLowerCase().includes(nombre.toLowerCase()) ||
+          nombre.toLowerCase().includes(a.nombre.toLowerCase().split(' ')[0])
+        )
+        if (asset) { newValues[asset.id] = String(valor); matched++ }
+      })
+
+      if (matched === 0) throw new Error('Ningún activo de la hoja coincide con tus activos registrados')
+      setCaptureValues(newValues)
+      localStorage.setItem('lifepilot_sheets_url', url)
+      setSheetsError(null)
+    } catch (e) {
+      setSheetsError(e instanceof Error ? e.message : 'Error al conectar con Google Sheets')
+    }
+    setSheetsLoading(false)
   }
 
   function openAddAsset() {
@@ -904,26 +979,71 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
               </div>
 
               <div className="px-6 py-4 space-y-4">
-                {/* Image scan button */}
-                <div>
-                  <input
-                    type="file" accept="image/*" ref={fileInputRef} className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) handleImageScan(f) }}
-                  />
+
+                {/* Import mode toggle */}
+                <div className="flex gap-1 rounded-2xl bg-white/5 p-1">
                   <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={scanningImage || !hasAnyAIKey()}
-                    className="w-full flex items-center justify-center gap-2 rounded-2xl border border-dashed border-white/15 hover:border-amber-500/40 py-3 text-sm text-white/50 hover:text-amber-400 transition disabled:opacity-40"
+                    onClick={() => setImportMode('sheets')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-medium transition ${importMode === 'sheets' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/25' : 'text-white/40 hover:text-white/60'}`}
                   >
-                    {scanningImage ? (
-                      <><motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full" /> Analizando imagen...</>
-                    ) : (
-                      <><Camera size={15} /> 📷 Subir captura de pantalla (IA)</>
-                    )}
+                    📊 Google Sheets
                   </button>
-                  {scanError && <p className="mt-1.5 text-xs text-red-400">{scanError}</p>}
-                  {!hasAnyAIKey() && <p className="mt-1 text-xs text-white/30 text-center">Configura Gemini en Ajustes para escanear imágenes</p>}
+                  <button
+                    onClick={() => setImportMode('image')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-medium transition ${importMode === 'image' ? 'bg-white/12 text-white' : 'text-white/40 hover:text-white/60'}`}
+                  >
+                    📷 Subir imagen
+                  </button>
                 </div>
+
+                {/* Google Sheets import */}
+                {importMode === 'sheets' && (
+                  <div className="space-y-2">
+                    <div className="rounded-2xl bg-white/4 border border-white/6 p-3 text-xs text-white/50 leading-relaxed">
+                      <span className="text-white/70 font-medium">Cómo compartir: </span>
+                      Abre tu Sheets → Compartir → &quot;Cualquier persona con el enlace&quot; → Lector → Copia la URL
+                    </div>
+                    <input
+                      value={sheetsUrl}
+                      onChange={e => setSheetsUrl(e.target.value)}
+                      placeholder="https://docs.google.com/spreadsheets/d/..."
+                      className="w-full rounded-2xl bg-white/6 border border-white/10 px-3 py-2.5 text-sm text-white/70 focus:outline-none focus:border-amber-500/30 placeholder:text-white/25"
+                    />
+                    <button
+                      onClick={handleSheetsSync}
+                      disabled={sheetsLoading || !sheetsUrl.trim()}
+                      className="w-full flex items-center justify-center gap-2 rounded-2xl bg-amber-600 hover:bg-amber-500 py-2.5 text-sm font-semibold text-white transition disabled:opacity-50"
+                    >
+                      {sheetsLoading
+                        ? <><motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} className="w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> Sincronizando...</>
+                        : '📊 Sincronizar desde Sheets'
+                      }
+                    </button>
+                    {sheetsError && <p className="text-xs text-red-400">{sheetsError}</p>}
+                  </div>
+                )}
+
+                {/* Image scan */}
+                {importMode === 'image' && (
+                  <div>
+                    <input
+                      type="file" accept="image/*" ref={fileInputRef} className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleImageScan(f) }}
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={scanningImage || !hasAnyAIKey()}
+                      className="w-full flex items-center justify-center gap-2 rounded-2xl border border-dashed border-white/15 hover:border-amber-500/40 py-3 text-sm text-white/50 hover:text-amber-400 transition disabled:opacity-40"
+                    >
+                      {scanningImage
+                        ? <><motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full" /> Analizando imagen...</>
+                        : <><Camera size={15} /> 📷 Subir captura de pantalla (IA)</>
+                      }
+                    </button>
+                    {scanError && <p className="mt-1.5 text-xs text-red-400">{scanError}</p>}
+                    {!hasAnyAIKey() && <p className="mt-1 text-xs text-white/30 text-center">Configura Gemini en Ajustes para escanear imágenes</p>}
+                  </div>
+                )}
 
                 {/* Asset rows */}
                 <div className="space-y-2">
