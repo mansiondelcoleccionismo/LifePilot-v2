@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { PageHeader } from '@/components/layout/PageContainer'
 import {
   ArrowLeft, ArrowRight, BookHeart, Calendar, CheckSquare,
   Dumbbell, Pill, Plus, Trash2, Utensils, X,
@@ -447,34 +448,28 @@ export function CalendarioPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm text-white/35">Calendario · Vista unificada</p>
-            <h1 className="text-3xl font-bold text-white/90 mt-1">Calendario</h1>
-          </div>
-          <div className="flex items-center gap-3">
+    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-7xl mx-auto pb-28">
+      <PageHeader
+        breadcrumb="Calendario · Vista unificada"
+        title="Calendario"
+        subtitle={`${MONTHS[month]} ${year}`}
+        actions={
+          <>
             <button
               onClick={() => navigate(-1)}
-              className="w-10 h-10 rounded-2xl bg-white/5 border border-white/8 flex items-center justify-center hover:border-white/14 transition"
+              className="w-9 h-9 rounded-xl bg-white/5 border border-white/8 flex items-center justify-center hover:border-white/14 transition"
             >
-              <ArrowLeft size={18} className="text-white/70" />
+              <ArrowLeft size={16} className="text-white/70" />
             </button>
-            <div className="text-center min-w-35">
-              <p className="text-sm text-white/35">{year}</p>
-              <p className="text-lg font-semibold text-white/90">{MONTHS[month]}</p>
-            </div>
             <button
               onClick={() => navigate(1)}
-              className="w-10 h-10 rounded-2xl bg-white/5 border border-white/8 flex items-center justify-center hover:border-white/14 transition"
+              className="w-9 h-9 rounded-xl bg-white/5 border border-white/8 flex items-center justify-center hover:border-white/14 transition"
             >
-              <ArrowRight size={18} className="text-white/70" />
+              <ArrowRight size={16} className="text-white/70" />
             </button>
-          </div>
-        </div>
-      </motion.div>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6">
         {/* Calendar grid */}

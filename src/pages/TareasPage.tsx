@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { PageHeader } from '@/components/layout/PageContainer'
 import { Plus, Trash2, CheckSquare, RefreshCw, AlertCircle } from 'lucide-react'
 import { subscribeTasks, addTask, toggleTask, deleteTask } from '@/services/tasks.service'
 import { getTasks, createTask, completeTask, deleteTask as deleteGTask, type GTask } from '@/services/google-tasks.service'
@@ -184,20 +185,12 @@ export function TareasPage() {
   const completed = tasks.filter((t) => t.completed)
 
   return (
-    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-2xl mx-auto">
+    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-2xl mx-auto pb-28">
 
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-emerald-500/15 flex items-center justify-center">
-            <CheckSquare size={18} className="text-emerald-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-white/90">Tareas</h1>
-            <p className="text-xs text-white/35">{pending.length} pendientes · {completed.length} completadas</p>
-          </div>
-        </div>
-      </motion.div>
+      <PageHeader
+        title="Tareas"
+        subtitle={`${pending.length} pendientes · ${completed.length} completadas`}
+      />
 
       {/* Google Tasks (si logueado) */}
       {isLoggedIn && <GoogleTasksSection />}

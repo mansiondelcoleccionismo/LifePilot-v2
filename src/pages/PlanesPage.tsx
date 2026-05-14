@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ExternalLink, Star, Check, Sparkles, ChevronRight } from 'lucide-react'
+import { PageHeader } from '@/components/layout/PageContainer'
 import { PLANES, type ActivityPlan, type PlanCategoria, type PlanTemporada, type PlanClima } from '@/data/planes'
 import {
   logPlan,
@@ -553,13 +554,11 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones adicional
   ]
 
   return (
-    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-5xl mx-auto">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <p className="text-sm text-white/35">Zaragoza · Pedrola</p>
-        <div className="flex items-end justify-between mt-1">
-          <h1 className="text-3xl font-bold text-white/90">Planes de finde</h1>
-          {/* Kira toggle */}
+    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-5xl mx-auto pb-28">
+      <PageHeader
+        breadcrumb="Zaragoza · Pedrola"
+        title="Planes de finde"
+        actions={
           <button
             onClick={() => setKiraEsteFindes(v => !v)}
             className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-medium transition ${
@@ -570,8 +569,8 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones adicional
           >
             👧 Kira {kiraEsteFindes ? 'Sí' : 'No'}
           </button>
-        </div>
-      </motion.div>
+        }
+      />
 
       {/* Tab nav */}
       <div className="flex gap-1 mb-6 bg-white/5 rounded-2xl p-1">

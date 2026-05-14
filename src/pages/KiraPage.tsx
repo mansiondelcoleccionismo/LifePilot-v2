@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { PageHeader } from '@/components/layout/PageContainer'
 import { X, ChevronRight, Sparkles, BookOpen, Star, MessageCircle, Send, Home, Trophy } from 'lucide-react'
 import { KIRA_ACTIVITIES, CATEGORY_META, type KiraActivityDef } from '@/data/kira-activities'
 import { KIRA_MILESTONES_DEF, getMilestoneStatus } from '@/data/kira-milestones'
@@ -927,32 +928,15 @@ export function KiraPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-lg mx-auto px-4 pb-24">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-        className="py-6 text-center">
-        <div className="relative inline-block mb-3">
-          <div className="w-20 h-20 rounded-full bg-linear-to-br from-amber-400 to-violet-500 flex items-center justify-center shadow-xl shadow-amber-500/20">
-            <span className="text-4xl">👧</span>
-          </div>
-          {todayIsKiraDay && (
-            <span className="absolute -top-1 -right-1 text-lg animate-pulse">✨</span>
-          )}
-        </div>
-        <h1 className="text-4xl font-bold bg-linear-to-r from-amber-400 to-violet-400 bg-clip-text text-transparent tracking-tight">
-          Kira
-        </h1>
-        <p className="text-sm text-white/50 mt-1">
-          {age.years} años y {age.months} meses
-        </p>
-        <div className="flex items-center justify-center gap-4 mt-2 text-xs text-white/30">
-          <span>🎂 Cumple en {birthdayCountdown} días</span>
-          {todayIsKiraDay && <span className="text-amber-400">⭐ Día de Kira</span>}
-        </div>
-        <p className="mt-3 text-xs text-violet-300/60 italic px-6 leading-relaxed">
-          "{getDailyPhrase()}"
-        </p>
-      </motion.div>
+    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-lg mx-auto pb-28">
+      <PageHeader
+        icon="👧"
+        title="Kira"
+        subtitle={`${age.years} años y ${age.months} meses · 🎂 Cumple en ${birthdayCountdown} días${todayIsKiraDay ? ' · ⭐ Día de Kira' : ''}`}
+      />
+      <p className="text-xs text-violet-300/60 italic leading-relaxed text-center mb-6">
+        "{getDailyPhrase()}"
+      </p>
 
       {/* Tab bar */}
       <div className="flex gap-1 mb-6 rounded-2xl bg-white/4 border border-white/6 p-1">

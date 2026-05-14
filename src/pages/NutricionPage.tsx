@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { PageHeader } from '@/components/layout/PageContainer'
 import {
   Search, Flame, Loader2, Bot, Trash2, X, Camera, Check, RotateCcw,
   Star, ChevronDown, ChevronRight, Plus, Minus,
@@ -942,14 +943,11 @@ export function NutricionPage() {
   return (
     <div className="px-4 py-6 md:px-6 lg:px-8 max-w-2xl mx-auto pb-28">
 
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-5">
-        <p className="text-sm text-white/35 capitalize">{todayDate}</p>
-        <div className="flex items-end justify-between mt-1">
-          <h1 className="text-3xl font-bold text-white/90">Nutrición</h1>
-          <span className="text-xs text-white/30 mb-1">{profile ? getDayLabel(profile) : ''}</span>
-        </div>
-      </motion.div>
+      <PageHeader
+        breadcrumb="Salud · Nutrición"
+        title="Nutrición"
+        subtitle={profile ? `${todayDate} · ${getDayLabel(profile)}` : todayDate}
+      />
 
       {/* Day type pills */}
       <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}

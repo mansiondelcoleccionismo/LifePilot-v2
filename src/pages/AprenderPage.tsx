@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { PageHeader } from '@/components/layout/PageContainer'
 import { BookOpen, Headphones, GraduationCap, Plus, X, Edit, Trash2, Filter, Book, Mic, PlayCircle } from 'lucide-react'
 import { addBook, subscribeBooks, updateBook, deleteBook, addPodcast, subscribePodcasts, updatePodcast, deletePodcast, addCourse, subscribeCourses, updateCourse, deleteCourse } from '@/services/learning.service'
 import type { Book as BookType, Podcast, Course, LearningStatus } from '@/types/learning'
@@ -307,21 +308,19 @@ export function AprenderPage() {
   }
 
   return (
-    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-6xl mx-auto">
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm text-white/35">Aprendizaje · Conocimiento</p>
-            <h1 className="text-3xl font-bold text-white/90 mt-1">Aprender</h1>
-          </div>
+    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-6xl mx-auto pb-28">
+      <PageHeader
+        breadcrumb="Aprendizaje · Conocimiento"
+        title="Aprender"
+        actions={
           <button
             onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
+            className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
           >
-            <Plus size={16} /> Añadir {tabConfig[activeTab].label.toLowerCase()}
+            <Plus size={15} /> Añadir {tabConfig[activeTab].label.toLowerCase()}
           </button>
-        </div>
-      </motion.div>
+        }
+      />
 
       {/* Tabs */}
       <div className="mb-6">

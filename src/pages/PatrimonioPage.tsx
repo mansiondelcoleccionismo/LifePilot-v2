@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { PageHeader } from '@/components/layout/PageContainer'
 import { Plus, Edit, Trash2, X, Camera, TrendingUp, TrendingDown, Sparkles, RefreshCw, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react'
 import {
   subscribeWealthAssets,
@@ -610,13 +611,11 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
         )}
       </AnimatePresence>
 
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm text-white/35">Finanzas · Inversiones</p>
-            <h1 className="text-3xl font-bold text-white/90 mt-1">Patrimonio</h1>
-          </div>
+      <PageHeader
+        breadcrumb="Finanzas · Inversiones"
+        title="Patrimonio"
+        subtitle={lastSnapshot ? `Último registro: ${lastSnapshot.date}` : undefined}
+        actions={
           <div className="flex gap-2">
             <button
               onClick={openCapture}
@@ -632,8 +631,8 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
               <Plus size={15} /> Añadir activo
             </button>
           </div>
-        </div>
-      </motion.div>
+        }
+      />
 
       {/* ── Hero total card ─────────────────────────────────────────────────── */}
       <motion.div

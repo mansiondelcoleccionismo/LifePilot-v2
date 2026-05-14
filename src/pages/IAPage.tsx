@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { PageHeader } from '@/components/layout/PageContainer'
 import { RefreshCw, Send, Sparkles, Brain, TrendingUp, Target, Zap, MessageSquare, ChevronRight } from 'lucide-react'
 import { callAI } from '@/services/ai.service'
 import { getWeatherToday } from '@/services/weather.service'
@@ -597,19 +598,13 @@ Responde en español, de forma concisa y práctica. Sin markdown, sin asteriscos
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="px-4 py-6 md:px-6 max-w-2xl mx-auto space-y-5 pb-24">
+    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-2xl mx-auto space-y-5 pb-28">
 
-      {/* ── SECTION 1: Header + Score ──────────────────────────────────────── */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-        className="rounded-3xl border border-white/10 bg-[#13111f] p-5">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <p className="text-xs text-violet-400/60 uppercase tracking-widest mb-1">Inteligencia Personal</p>
-            <h1 className="text-xl font-bold text-white/95 flex items-center gap-2">
-              <Sparkles size={18} className="text-violet-400" />
-              Centro de análisis
-            </h1>
-          </div>
+      <PageHeader
+        icon="✨"
+        title="Inteligencia Personal"
+        breadcrumb="IA · Análisis personal"
+        actions={
           <button
             onClick={loadData}
             disabled={loading}
@@ -618,8 +613,12 @@ Responde en español, de forma concisa y práctica. Sin markdown, sin asteriscos
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
             {minutesAgo === 0 ? 'ahora' : `hace ${minutesAgo}m`}
           </button>
-        </div>
+        }
+      />
 
+      {/* ── SECTION 1: Score ──────────────────────────────────────────────── */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+        className="rounded-3xl border border-white/10 bg-[#13111f] p-5">
         {loading ? (
           <div className="space-y-3">
             <SkeletonLine w="50%" h={32} />

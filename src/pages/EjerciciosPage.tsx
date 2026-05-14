@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { PageHeader } from '@/components/layout/PageContainer'
 import {
   Check, ChevronDown, ChevronUp, Dumbbell, History,
   LayoutGrid, Save, Settings, SkipForward, Sparkles,
@@ -1092,11 +1093,8 @@ export function EjerciciosPage() {
   ]
 
   return (
-    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-3xl mx-auto">
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <p className="text-sm text-white/35">Ejercicios · Programa semanal</p>
-        <h1 className="text-3xl font-bold text-white/90 mt-1">Entrenamientos</h1>
-      </motion.div>
+    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-3xl mx-auto pb-28">
+      <PageHeader breadcrumb="Ejercicios · Programa semanal" title="Entrenamientos" />
 
       {/* Resumen semanal */}
       <div className="grid grid-cols-3 gap-3 mb-5">

@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
+import { PageHeader } from '@/components/layout/PageContainer'
 import {
   ArrowLeft, ArrowRight, CalendarDays, Check, Flame, Trash2, TrendingUp,
 } from 'lucide-react'
@@ -288,7 +289,7 @@ export function DiarioPage() {
   const avgMoodOpt = avgMood > 0 ? MOOD[Math.round(avgMood) - 1] : null
 
   return (
-    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-3xl mx-auto">
+    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-3xl mx-auto pb-28">
 
       {/* Header */}
       {fbStatus === 'error' && (
@@ -296,10 +297,7 @@ export function DiarioPage() {
           ⚠️ Error conectando con Firebase — revisa la consola (F12)
         </div>
       )}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <p className="text-sm text-white/35">Diario · Registro emocional</p>
-        <h1 className="text-3xl font-bold text-white/90 mt-1">Tu diario</h1>
-      </motion.div>
+      <PageHeader breadcrumb="Diario · Registro emocional" title="Tu diario" />
 
       {/* ── Calendario ── */}
       <div className="rounded-2xl bg-[#1E1E28] border border-white/8 p-5 mb-4">

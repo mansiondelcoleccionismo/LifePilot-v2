@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
+import { PageHeader } from '@/components/layout/PageContainer'
 import { useNavigate } from 'react-router-dom'
 import { RefreshCw, Loader2, ChevronRight, Check, Scale } from 'lucide-react'
 import { useAuthStore } from '@/store/auth.store'
@@ -259,7 +260,20 @@ export function InicioPage() {
   const hasMoreTasks = pendingTasks.length > 3
 
   return (
-    <div className="px-4 pb-28 pt-5 md:px-6 lg:px-8 max-w-5xl mx-auto space-y-5">
+    <div className="px-4 py-6 pb-28 md:px-6 lg:px-8 max-w-5xl mx-auto space-y-5">
+
+      <PageHeader
+        title={`${greeting}, ${firstName}.`}
+        subtitle={dateLabel}
+        actions={
+          weather ? (
+            <div className="flex items-center gap-1.5 text-sm text-white/55">
+              <span className="text-base leading-none">{weather.emoji}</span>
+              <span className="font-medium">{weather.tempMax}°C</span>
+            </div>
+          ) : undefined
+        }
+      />
 
       {/* ══════════════════════════════════════════════════════════════════
           ZONE 1 — HERO
@@ -270,22 +284,6 @@ export function InicioPage() {
         transition={{ duration: 0.3 }}
         className={`rounded-3xl border border-white/8 bg-linear-to-br ${theme.gradient} to-[#1E1E28] p-6`}
       >
-        {/* Date + weather */}
-        <div className="flex items-center justify-between mb-5">
-          <p className="text-sm text-white/40 capitalize">{dateLabel}</p>
-          {weather && (
-            <div className="flex items-center gap-1.5 text-sm text-white/55">
-              <span className="text-base leading-none">{weather.emoji}</span>
-              <span className="font-medium">{weather.tempMax}°C</span>
-            </div>
-          )}
-        </div>
-
-        {/* Greeting */}
-        <h1 className="text-[2rem] font-bold text-white/90 tracking-tight leading-tight mb-3">
-          {greeting}, {firstName}.
-        </h1>
-
         {/* Day badge */}
         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${theme.badge} mb-5`}>
           {theme.label}

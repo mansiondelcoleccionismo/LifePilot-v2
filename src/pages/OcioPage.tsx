@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { PageHeader } from '@/components/layout/PageContainer'
 import {
   Plus, Star, Play, X, Search, Film, Tv, BookOpen, Zap,
   BarChart2, List, Check, ChevronRight, Trash2, Upload,
@@ -1289,15 +1290,12 @@ export function OcioPage() {
   }
 
   return (
-    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-4xl mx-auto">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="text-xs text-white/30 uppercase tracking-widest">Entretenimiento</p>
-            <h1 className="text-3xl font-bold text-white/90 mt-1">Ocio</h1>
-          </div>
-          <div className="flex items-center gap-2">
+    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-4xl mx-auto pb-28">
+      <PageHeader
+        breadcrumb="Entretenimiento"
+        title="Ocio"
+        actions={
+          <>
             {!physicalSeeded && (
               <button onClick={handleSeedPhysical} disabled={seeding}
                 className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/8 px-3 py-2 text-xs text-white/50 transition disabled:opacity-50">
@@ -1309,9 +1307,9 @@ export function OcioPage() {
               className="flex items-center gap-1.5 rounded-2xl bg-violet-600 hover:bg-violet-500 px-4 py-2.5 text-sm font-semibold text-white transition">
               <Plus size={15} /> Añadir
             </button>
-          </div>
-        </div>
-      </motion.div>
+          </>
+        }
+      />
 
       {/* Sommelier de Contenido */}
       {!loading && (
