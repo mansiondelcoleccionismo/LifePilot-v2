@@ -15,6 +15,7 @@ export interface FoodFavorite {
   per100g: { kcal: number; protein: number; carbs: number; fat: number }
   defaultGrams: number
   usageCount: number
+  lastUsedAt?: Date
 }
 
 // Preloaded items — stored as per100g + defaultGrams
@@ -84,7 +85,14 @@ export async function initFavorites(): Promise<void> {
 export async function getFavorites(): Promise<FoodFavorite[]> {
   try {
     const snap = await getDocs(query(collection(db, COL), orderBy('usageCount', 'desc')))
-    return snap.docs.map(d => ({ id: d.id, ...d.data() } as FoodFavorite))
+    return snap.docs.map(d => {
+      const data = d.data()
+      return {
+        id: d.id,
+        ...data,
+        lastUsedAt: data['lastUsedAt']?.toDate?.() ?? undefined,
+      } as FoodFavorite
+    })
   } catch {
     return []
   }
@@ -103,6 +111,27 @@ export async function removeFavorite(id: string): Promise<void> {
 
 export async function incrementUsage(id: string): Promise<void> {
   try {
-    await updateDoc(doc(db, COL, id), { usageCount: increment(1) })
+    await updateDoc(doc(db, COL, id), {
+      usageCount: increment(1),
+      lastUsedAt: serverTimestamp(),
+    })
   } catch { /* ignore */ }
+}
+
+/** Sort by recency tier (today > week > month > older) then by usageCount. */
+export function sortByRelevance(favs: FoodFavorite[]): FoodFavorite[] {
+  const now = Date.now()
+  const DAY = 86_400_000
+  const tier = (f: FoodFavorite) => {
+    if (!f.lastUsedAt) return 4
+    const age = (now - f.lastUsedAt.getTime()) / DAY
+    if (age < 1)  return 0
+    if (age < 7)  return 1
+    if (age < 30) return 2
+    return 3
+  }
+  return [...favs].sort((a, b) => {
+    const dt = tier(a) - tier(b)
+    return dt !== 0 ? dt : b.usageCount - a.usageCount
+  })
 }

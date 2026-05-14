@@ -11,7 +11,7 @@ import { DAY_TARGETS, type DayType, type FoodEntry, type MealType } from '@/type
 import { loadProfile, autoDetectDayType, getTargetForDayType, getDayLabel } from '@/services/metabolic.service'
 import {
   initFavorites, getFavorites, addFavorite, removeFavorite, incrementUsage,
-  type FoodFavorite,
+  sortByRelevance, type FoodFavorite,
 } from '@/services/favorites.service'
 import type { UserProfile } from '@/types/profile'
 import { NUTRITION_REFERENCE } from '@/data/nutrition-reference'
@@ -817,6 +817,7 @@ export function NutricionPage() {
   const [entries, setEntries]       = useState<FoodEntry[]>([])
   const [loading, setLoading]       = useState(true)
   const [favorites, setFavorites]   = useState<FoodFavorite[]>([])
+  const [showAllFavs, setShowAllFavs] = useState(false)
   const [profile, setProfile]       = useState<UserProfile | null>(null)
 
   const [dayType, setDayType] = useState<DayType>(() =>
@@ -845,11 +846,14 @@ export function NutricionPage() {
     const saved = localStorage.getItem(getDayTypeKey()) as DayType | null
     if (!saved) setDayType(autoDetectDayType(p))
 
-    // Init + load favorites
-    initFavorites().then(() => getFavorites().then(setFavorites))
+    // Init + load favorites sorted by relevance
+    initFavorites().then(() =>
+      getFavorites().then(favs => setFavorites(sortByRelevance(favs)))
+    )
   }, [])
 
-  const reloadFavorites = () => getFavorites().then(setFavorites)
+  const reloadFavorites = () =>
+    getFavorites().then(favs => setFavorites(sortByRelevance(favs)))
 
   // ── Entries subscription ──────────────────────────────────────────────────
   useEffect(() => {
@@ -1017,9 +1021,14 @@ export function NutricionPage() {
       {/* Favorites or search results */}
       <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
         className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5 mb-4">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-white/25 mb-4">
-          {isSearching ? 'Resultados' : '⚡ Acceso rápido'}
-        </p>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">
+            {isSearching ? 'Resultados' : '⚡ Acceso rápido'}
+          </p>
+          {!isSearching && favorites.length > 0 && (
+            <p className="text-[10px] text-white/20">ordenado por uso reciente</p>
+          )}
+        </div>
 
         {isSearching ? (
           /* Search results */
@@ -1060,38 +1069,67 @@ export function NutricionPage() {
             )}
           </div>
         ) : (
-          /* Favorites grid */
+          /* Smart favorites grid — top 6 by recency+frequency */
           favorites.length === 0 ? (
             <div className="text-center py-8 text-sm text-white/30">Cargando favoritos…</div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {favorites.map(fav => {
-                const servKcal = Math.round(fav.per100g.kcal * fav.defaultGrams / 100)
-                const servP    = Math.round(fav.per100g.protein * fav.defaultGrams / 100 * 10) / 10
-                const servC    = Math.round(fav.per100g.carbs   * fav.defaultGrams / 100 * 10) / 10
-                const servF    = Math.round(fav.per100g.fat     * fav.defaultGrams / 100 * 10) / 10
-                return (
-                  <div key={fav.id} className="relative group">
-                    <button onClick={() => openFavorite(fav)}
-                      className="w-full rounded-2xl bg-white/4 border border-white/6 p-3 text-left hover:bg-white/7 hover:border-white/12 transition-all active:scale-95">
-                      <div className="flex items-start justify-between mb-2">
-                        <FoodThumb emoji={fav.emoji} imageUrl={fav.imageUrl} />
-                        <span className="text-lg font-bold text-orange-400 leading-tight">{servKcal}</span>
+          ) : (() => {
+            const QUICK_LIMIT = 6
+            const visible = showAllFavs ? favorites : favorites.slice(0, QUICK_LIMIT)
+            const hidden  = favorites.length - QUICK_LIMIT
+
+            return (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {visible.map(fav => {
+                    const servKcal = Math.round(fav.per100g.kcal * fav.defaultGrams / 100)
+                    const servP    = Math.round(fav.per100g.protein * fav.defaultGrams / 100 * 10) / 10
+                    const servC    = Math.round(fav.per100g.carbs   * fav.defaultGrams / 100 * 10) / 10
+                    const servF    = Math.round(fav.per100g.fat     * fav.defaultGrams / 100 * 10) / 10
+                    const usedToday = fav.lastUsedAt
+                      ? (Date.now() - fav.lastUsedAt.getTime()) < 86_400_000
+                      : false
+                    return (
+                      <div key={fav.id} className="relative group">
+                        <button onClick={() => openFavorite(fav)}
+                          className={`w-full rounded-2xl border p-3 text-left transition-all active:scale-95 ${
+                            usedToday
+                              ? 'bg-blue-500/8 border-blue-500/20 hover:bg-blue-500/12'
+                              : 'bg-white/4 border-white/6 hover:bg-white/7 hover:border-white/12'
+                          }`}>
+                          <div className="flex items-start justify-between mb-2">
+                            <FoodThumb emoji={fav.emoji} imageUrl={fav.imageUrl} />
+                            <div className="text-right">
+                              <span className="text-lg font-bold text-orange-400 leading-tight block">{servKcal}</span>
+                              {fav.usageCount >= 3 && (
+                                <span className="text-[9px] text-white/25 leading-none">×{fav.usageCount}</span>
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-xs font-medium text-white/80 leading-snug line-clamp-2 mb-1">{fav.name}</p>
+                          <p className="text-[10px] text-white/30">P{servP}·C{servC}·G{servF}</p>
+                        </button>
+                        <button
+                          onClick={async (e) => { e.stopPropagation(); await removeFavorite(fav.id); reloadFavorites() }}
+                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition w-6 h-6 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 flex items-center justify-center"
+                        >
+                          <X size={11} className="text-rose-400" />
+                        </button>
                       </div>
-                      <p className="text-xs font-medium text-white/80 leading-snug line-clamp-2 mb-1">{fav.name}</p>
-                      <p className="text-[10px] text-white/30">P{servP}·C{servC}·G{servF}</p>
-                    </button>
-                    <button
-                      onClick={async (e) => { e.stopPropagation(); await removeFavorite(fav.id); reloadFavorites() }}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition w-6 h-6 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 flex items-center justify-center"
-                    >
-                      <X size={11} className="text-rose-400" />
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          )
+                    )
+                  })}
+                </div>
+
+                {hidden > 0 && (
+                  <button
+                    onClick={() => setShowAllFavs(v => !v)}
+                    className="mt-3 w-full py-2 rounded-xl bg-white/3 border border-white/6 text-xs text-white/35 hover:text-white/55 hover:bg-white/5 transition"
+                  >
+                    {showAllFavs ? 'Ver menos' : `Ver ${hidden} más`}
+                  </button>
+                )}
+              </>
+            )
+          })()
         )}
       </motion.section>
 
