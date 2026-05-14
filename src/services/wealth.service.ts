@@ -34,9 +34,12 @@ const ANALYSIS_COL      = 'wealth_analysis'
 const USD_TO_EUR = 0.92
 
 // ── Google Sheets sync (fixed sheet) ────────────────────────────────────────
-const SHEETS_ID      = '19DCE3rGofq54kFhtbE9NsDzB8K4LxsbPVLzehGNom-o'
-const SHEETS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEETS_ID}/gviz/tq?tqx=out:csv`
-const SYNC_LS_KEY    = 'patrimonio_last_sheets_sync'
+const SHEETS_ID   = '19DCE3rGofq54kFhtbE9NsDzB8K4LxsbPVLzehGNom-o'
+const SHEETS_BASE = `https://docs.google.com/spreadsheets/d/${SHEETS_ID}/gviz/tq?tqx=out:csv`
+const SYNC_LS_KEY = 'patrimonio_last_sheets_sync'
+
+// Rows containing these strings in the Nombre column are skipped
+const SKIP_NOMBRE = ['total patrimonio', 'distribución', 'distribucion', 'tipo activo', 'nombre', 'activos financieros']
 
 function parseCSVRows(csv: string): string[][] {
   return csv.split('\n').filter(l => l.trim()).map(line => {
@@ -54,41 +57,96 @@ function parseCSVRows(csv: string): string[][] {
 }
 
 function parseEuro(raw: string): number {
-  const s = raw.replace(/[€$£\s"]/g, '').trim()
+  // Strip currency symbols, quotes, non-breaking spaces
+  const s = raw.replace(/[€$£ "]/g, '').trim()
   if (!s) return NaN
-  // Spanish format: 1.234,56 → dot=thousands, comma=decimal
+  // Spanish format "8.000,00": dots = thousands sep, comma = decimal sep
   if (s.includes(',')) return parseFloat(s.replace(/\./g, '').replace(',', '.'))
+  // Plain number or English format "8000.00"
   return parseFloat(s.replace(/,/g, ''))
 }
 
+async function fetchSheetCSV(sheetParam: string): Promise<string> {
+  // Try without encoding first (some proxies prefer literal URLs)
+  const url = `${SHEETS_BASE}&${sheetParam}`
+  let res = await fetch(`https://corsproxy.io/?${url}`)
+  if (!res.ok) {
+    // Fallback: percent-encode the entire target URL
+    res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`)
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status} para ${sheetParam}`)
+  return res.text()
+}
+
 export async function syncFromSheets(): Promise<WealthAsset[]> {
-  // Fetch CSV with CORS-proxy fallback
-  let csv: string
-  try {
-    const res = await fetch(SHEETS_CSV_URL)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    csv = await res.text()
-  } catch {
-    const proxied = `https://corsproxy.io/?${encodeURIComponent(SHEETS_CSV_URL)}`
-    const res = await fetch(proxied)
-    if (!res.ok) throw new Error(`Error ${res.status} al conectar con Google Sheets`)
-    csv = await res.text()
+  // Try sheet=ACTIVOS first, then numeric gid fallbacks
+  const attempts = ['sheet=ACTIVOS', 'gid=0', 'gid=1', 'gid=2', 'gid=3']
+
+  let rows: string[][] = []
+  let headerRowIdx = -1
+
+  for (const param of attempts) {
+    try {
+      const csv = await fetchSheetCSV(param)
+      const parsed = parseCSVRows(csv)
+      console.log(`[Sheets] ${param}: ${parsed.length} rows`, parsed.slice(0, 3).map(r => r.slice(0, 4)))
+
+      // Header row = first row containing "nombre" or "valor"
+      const idx = parsed.findIndex(row =>
+        row.some(cell => {
+          const c = cell.toLowerCase().replace(/['"]/g, '').trim()
+          return c === 'nombre' || c.includes('valor')
+        })
+      )
+
+      if (idx >= 0) {
+        rows = parsed
+        headerRowIdx = idx
+        console.log(`[Sheets] Headers found at row ${idx} using param "${param}"`)
+        break
+      }
+    } catch (e) {
+      console.warn(`[Sheets] Attempt "${param}" failed:`, e)
+    }
   }
 
-  const rows = parseCSVRows(csv)
-  if (rows.length < 2) throw new Error('La hoja está vacía o no contiene datos')
+  if (headerRowIdx < 0) {
+    throw new Error('No se encontraron las cabeceras en ninguna pestaña. Verifica que la hoja "ACTIVOS" sea pública.')
+  }
 
-  const headers = rows[0].map(h => h.toLowerCase().replace(/['"]/g, '').trim())
-  const findCol = (...names: string[]) => headers.findIndex(h => names.some(n => h.includes(n)))
+  const headerRow = rows[headerRowIdx].map(h => h.toLowerCase().replace(/['"]/g, '').trim())
+  const findCol = (...names: string[]) => headerRow.findIndex(h => names.some(n => h.includes(n)))
 
-  const nombreCol       = findCol('nombre', 'activo', 'name', 'asset')
+  const nombreCol       = findCol('nombre', 'name', 'asset')
   const valorCol        = findCol('valor', 'value', 'importe', 'saldo')
   const plataformaCol   = findCol('plataforma', 'platform', 'broker')
   const tipoProductoCol = findCol('tipo producto', 'tipoproducto', 'producto', 'product')
-  const tipoActivoCol   = findCol('tipo activo', 'tipoactivo', 'tipo')
+  const tipoActivoCol   = findCol('tipo activo', 'tipoactivo')
 
   if (nombreCol < 0 || valorCol < 0) {
-    throw new Error(`Columnas "Nombre" y "Valor" no encontradas. Cabeceras: ${rows[0].join(', ')}`)
+    throw new Error(`Columnas no encontradas. Cabeceras detectadas: ${rows[headerRowIdx].join(' | ')}`)
+  }
+
+  // Filter valid data rows (skip title, totals, distribution rows)
+  const dataRows = rows.slice(headerRowIdx + 1).filter(row => {
+    const nombre = row[nombreCol]?.replace(/^"|"$/g, '').trim()
+    if (!nombre) return false
+    const nl = nombre.toLowerCase()
+    if (SKIP_NOMBRE.some(s => nl.includes(s))) return false
+    const valor = parseEuro(row[valorCol] ?? '')
+    return !isNaN(valor) && valor > 0
+  })
+
+  console.log(
+    `[Sheets] ${dataRows.length} assets to sync:`,
+    dataRows.slice(0, 5).map(r => ({
+      nombre: r[nombreCol]?.replace(/^"|"$/g, '').trim(),
+      valor:  r[valorCol]?.replace(/^"|"$/g, '').trim(),
+    })),
+  )
+
+  if (dataRows.length === 0) {
+    throw new Error('No se encontraron activos válidos en la hoja ACTIVOS')
   }
 
   const VALID_TIPO_PRODUCTO: TipoProducto[] = [
@@ -101,39 +159,36 @@ export async function syncFromSheets(): Promise<WealthAsset[]> {
   const existing = await getDocs(collection(db, WEALTH_ASSETS_COL))
   await Promise.all(existing.docs.map(d => deleteDoc(doc(db, WEALTH_ASSETS_COL, d.id))))
 
-  // Insert new assets from CSV rows
+  // Insert new assets sequentially to preserve order
   const newAssets: WealthAsset[] = []
-  const insertTasks = rows.slice(1).map(async row => {
-    const nombre = row[nombreCol]?.replace(/^"|"$/g, '').trim()
-    const valor  = parseEuro(row[valorCol] ?? '')
-    if (!nombre || isNaN(valor) || valor < 0) return
-
-    const plataforma = plataformaCol >= 0 ? (row[plataformaCol]?.replace(/^"|"$/g, '').trim() ?? '') : ''
-    const rawTP = tipoProductoCol >= 0 ? row[tipoProductoCol]?.replace(/^"|"$/g, '').trim() : ''
-    const rawTA = tipoActivoCol   >= 0 ? row[tipoActivoCol]?.replace(/^"|"$/g, '').trim()   : ''
+  for (const row of dataRows) {
+    const nombre   = row[nombreCol].replace(/^"|"$/g, '').trim()
+    const valor    = parseEuro(row[valorCol] ?? '')
+    const plataforma  = plataformaCol   >= 0 ? (row[plataformaCol]?.replace(/^"|"$/g, '').trim() ?? '')  : ''
+    const rawTP       = tipoProductoCol >= 0 ?  row[tipoProductoCol]?.replace(/^"|"$/g, '').trim() ?? '' : ''
+    const rawTA       = tipoActivoCol   >= 0 ?  row[tipoActivoCol]?.replace(/^"|"$/g, '').trim()   ?? '' : ''
 
     const tipoActivo: TipoActivo = VALID_TIPO_ACTIVO.includes(rawTA as TipoActivo)
       ? (rawTA as TipoActivo)
-      : rawTA?.includes('Fija') ? 'Renta Fija'
-      : rawTA?.includes('Variable') ? 'Renta Variable'
-      : rawTA?.toLowerCase().includes('cripto') ? 'Cripto'
+      : rawTA.includes('Fija')     ? 'Renta Fija'
+      : rawTA.includes('Variable') ? 'Renta Variable'
+      : rawTA.toLowerCase().includes('cripto') ? 'Cripto'
+      : rawTA.toLowerCase().includes('liquid') ? 'Liquidez'
       : 'Renta Variable'
 
     const tipoProducto: TipoProducto = VALID_TIPO_PRODUCTO.includes(rawTP as TipoProducto)
       ? (rawTP as TipoProducto)
-      : tipoActivo === 'Liquidez' ? 'Liquidez'
-      : tipoActivo === 'Renta Fija' ? 'Renta Fija'
-      : tipoActivo === 'Cripto' ? 'Cripto'
+      : tipoActivo === 'Liquidez'    ? 'Liquidez'
+      : tipoActivo === 'Renta Fija'  ? 'Renta Fija'
+      : tipoActivo === 'Cripto'      ? 'Cripto'
       : 'Renta Variable'
 
     const ref = await addDoc(collection(db, WEALTH_ASSETS_COL), {
       nombre, plataforma, tipoProducto, tipoActivo, valor, updatedAt: serverTimestamp(),
     })
     newAssets.push({ id: ref.id, nombre, plataforma, tipoProducto, tipoActivo, valor, updatedAt: new Date() })
-  })
-  await Promise.all(insertTasks)
+  }
 
-  // Save snapshot and sync timestamp
   if (newAssets.length > 0) await savePatrimonioSnapshot(newAssets)
   localStorage.setItem(SYNC_LS_KEY, new Date().toISOString())
 
