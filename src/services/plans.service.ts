@@ -2,119 +2,102 @@ import {
   collection,
   addDoc,
   updateDoc,
-  deleteDoc,
   doc,
   onSnapshot,
   query,
   orderBy,
+  where,
+  getDocs,
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import type { Plan } from '@/types/plan'
+import { PLANES } from '@/data/planes'
 
-const COL = 'plans'
+const COL = 'plan_logs'
 
-export function subscribePlans(callback: (plans: Plan[]) => void) {
-  const q = query(
-    collection(db, COL),
-    orderBy('createdAt', 'desc')
-  )
-
-  return onSnapshot(q, (snapshot) => {
-    const plans = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate() || new Date(),
-      updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-      steps: doc.data().steps?.map((step: any) => ({
-        ...step,
-        createdAt: step.createdAt?.toDate() || new Date(),
-        updatedAt: step.updatedAt?.toDate() || new Date(),
-      })) || [],
-    })) as Plan[]
-
-    callback(plans)
-  })
+export interface PlanLog {
+  id: string
+  planId: string
+  planNombre: string
+  planEmoji: string
+  date: Date
+  withKira: boolean
+  rating?: number
+  kiraLikes?: boolean
+  note?: string
+  weather?: string
+  createdAt: Date
 }
 
-export async function addPlan(plan: Omit<Plan, 'id' | 'createdAt' | 'updatedAt'>) {
+export async function logPlan(
+  planId: string,
+  data: { withKira: boolean; weather?: string },
+): Promise<string> {
+  const plan = PLANES.find(p => p.id === planId)
   const docRef = await addDoc(collection(db, COL), {
-    ...plan,
+    planId,
+    planNombre: plan?.nombre ?? planId,
+    planEmoji: plan?.emoji ?? '📌',
+    date: serverTimestamp(),
+    withKira: data.withKira,
+    weather: data.weather ?? null,
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
   })
   return docRef.id
 }
 
-export async function updatePlan(id: string, updates: Partial<Omit<Plan, 'id' | 'createdAt'>>) {
-  const docRef = doc(db, COL, id)
-  await updateDoc(docRef, {
-    ...updates,
-    updatedAt: serverTimestamp(),
+export async function updatePlanLog(
+  logId: string,
+  updates: { rating?: number; kiraLikes?: boolean; note?: string },
+): Promise<void> {
+  await updateDoc(doc(db, COL, logId), { ...updates })
+}
+
+export function subscribePlanHistory(callback: (logs: PlanLog[]) => void): () => void {
+  const q = query(collection(db, COL), orderBy('createdAt', 'desc'))
+  return onSnapshot(q, snapshot => {
+    const logs = snapshot.docs.map(d => ({
+      id: d.id,
+      ...d.data(),
+      date: d.data().date?.toDate() ?? new Date(),
+      createdAt: d.data().createdAt?.toDate() ?? new Date(),
+    })) as PlanLog[]
+    callback(logs)
   })
 }
 
-export async function deletePlan(id: string) {
-  const docRef = doc(db, COL, id)
-  await deleteDoc(docRef)
-}
-
-export async function updatePlanStep(planId: string, stepId: string, completed: boolean) {
-  const planRef = doc(db, COL, planId)
-
-  // First get the current plan to update the step
-  const planDoc = await import('firebase/firestore').then(({ getDoc }) => getDoc(planRef))
-  if (!planDoc.exists()) return
-
-  const plan = planDoc.data() as Plan
-  const updatedSteps = plan.steps.map(step =>
-    step.id === stepId
-      ? { ...step, completed, updatedAt: new Date() }
-      : step
+export async function getRecentPlans(weeks = 3): Promise<string[]> {
+  const since = new Date()
+  since.setDate(since.getDate() - weeks * 7)
+  const q = query(
+    collection(db, COL),
+    where('createdAt', '>=', since),
+    orderBy('createdAt', 'desc'),
   )
-
-  await updateDoc(planRef, {
-    steps: updatedSteps,
-    updatedAt: serverTimestamp(),
-  })
+  const snap = await getDocs(q)
+  return [...new Set(snap.docs.map(d => d.data().planId as string))]
 }
 
-export async function addPlanStep(planId: string, stepTitle: string) {
-  const planRef = doc(db, COL, planId)
-
-  const newStep = {
-    id: Date.now().toString(),
-    title: stepTitle,
-    completed: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+export async function getPlanStats(planId: string): Promise<{
+  vecesHecho: number
+  puntuacionMedia: number
+  ultimaVez?: Date
+}> {
+  const q = query(
+    collection(db, COL),
+    where('planId', '==', planId),
+    orderBy('createdAt', 'desc'),
+  )
+  const snap = await getDocs(q)
+  const logs = snap.docs.map(d => d.data())
+  const withRating = logs.filter(l => l.rating != null)
+  const puntuacionMedia =
+    withRating.length > 0
+      ? withRating.reduce((s, l) => s + (l.rating as number), 0) / withRating.length
+      : 0
+  return {
+    vecesHecho: logs.length,
+    puntuacionMedia,
+    ultimaVez: logs[0]?.createdAt?.toDate?.() ?? undefined,
   }
-
-  // First get the current plan to add the step
-  const planDoc = await import('firebase/firestore').then(({ getDoc }) => getDoc(planRef))
-  if (!planDoc.exists()) return
-
-  const plan = planDoc.data() as Plan
-  const updatedSteps = [...plan.steps, newStep]
-
-  await updateDoc(planRef, {
-    steps: updatedSteps,
-    updatedAt: serverTimestamp(),
-  })
-}
-
-export async function deletePlanStep(planId: string, stepId: string) {
-  const planRef = doc(db, COL, planId)
-
-  // First get the current plan to remove the step
-  const planDoc = await import('firebase/firestore').then(({ getDoc }) => getDoc(planRef))
-  if (!planDoc.exists()) return
-
-  const plan = planDoc.data() as Plan
-  const updatedSteps = plan.steps.filter(step => step.id !== stepId)
-
-  await updateDoc(planRef, {
-    steps: updatedSteps,
-    updatedAt: serverTimestamp(),
-  })
 }
