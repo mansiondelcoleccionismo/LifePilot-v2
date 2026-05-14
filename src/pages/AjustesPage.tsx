@@ -306,10 +306,6 @@ export function AjustesPage() {
   const [icalTestState, setIcalTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
   const [icalTestMsg, setIcalTestMsg] = useState('')
 
-  const [sheetsUrl, setSheetsUrl]           = useState(() => localStorage.getItem('lifepilot_sheets_url') ?? '')
-  const [sheetsTestState, setSheetsTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
-  const [sheetsTestMsg, setSheetsTestMsg]   = useState('')
-
   const handleSaveIcalUrl = () => {
     saveICalUrl(icalUrl)
     // Clear old cache so next load re-fetches
@@ -340,33 +336,6 @@ export function AjustesPage() {
   const maskedUrl = (url: string) => {
     if (url.length < 30) return url
     return url.slice(0, 28) + '…' + url.slice(-10)
-  }
-
-  const handleSaveSheets = () => {
-    localStorage.setItem('lifepilot_sheets_url', sheetsUrl.trim())
-    setFeedback('URL de Sheets guardada')
-    setTimeout(() => setFeedback(''), 2400)
-  }
-
-  const handleTestSheets = async () => {
-    const url = sheetsUrl.trim()
-    if (!url) return
-    setSheetsTestState('testing'); setSheetsTestMsg('')
-    try {
-      const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
-      const sheetId = m?.[1]
-      if (!sheetId) throw new Error('URL no válida')
-      const res = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`)
-      if (!res.ok) throw new Error(`HTTP ${res.status} — Verifica que la hoja sea pública`)
-      const csv = await res.text()
-      const lines = csv.split('\n').filter(l => l.trim()).length
-      setSheetsTestState('ok')
-      setSheetsTestMsg(`Conexión correcta — ${lines - 1} filas de datos`)
-    } catch (e) {
-      setSheetsTestState('fail')
-      setSheetsTestMsg(e instanceof Error ? e.message : 'Error de conexión')
-    }
-    setTimeout(() => setSheetsTestState('idle'), 8000)
   }
 
   return (
@@ -1099,65 +1068,6 @@ export function AjustesPage() {
                 <li>Copia el enlace y pégalo arriba</li>
               </ol>
             </div>
-          </div>
-        </section>
-
-        {/* Patrimonio — Google Sheets */}
-        <section className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 flex items-center justify-center text-xl">
-              💰
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">Patrimonio</p>
-              <h2 className="text-lg font-semibold text-white/90 mt-1">Google Sheets</h2>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/8 bg-white/5 p-4 space-y-4">
-            <p className="text-sm text-white/60 leading-relaxed">
-              Conecta tu hoja de Google Sheets para sincronizar los valores de tu cartera automáticamente desde el modal de actualización mensual.
-            </p>
-
-            <div className="rounded-2xl bg-white/4 border border-white/6 p-3 text-xs text-white/50 space-y-1">
-              <p className="text-white/70 font-medium mb-1.5">Cómo compartir tu Sheets:</p>
-              <p>1. Abre tu hoja → botón <span className="text-white/70">Compartir</span></p>
-              <p>2. Cambiar a <span className="text-white/70">Cualquier persona con el enlace → Lector</span></p>
-              <p>3. Copia la URL y pégala aquí</p>
-              <p className="text-white/35 pt-1">La hoja debe tener columnas: <span className="text-white/60">Nombre</span> y <span className="text-white/60">Valor</span></p>
-            </div>
-
-            <div>
-              <label className="text-[10px] uppercase tracking-[0.3em] text-white/35">URL de Google Sheets</label>
-              <input
-                value={sheetsUrl}
-                onChange={e => setSheetsUrl(e.target.value)}
-                placeholder="https://docs.google.com/spreadsheets/d/..."
-                className="mt-2 w-full rounded-2xl bg-[#1E1E28] border border-white/8 px-4 py-3 text-sm text-white/80 focus:outline-none focus:border-amber-500/30 placeholder:text-white/25"
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleSaveSheets}
-                className="inline-flex items-center gap-2 rounded-2xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-500"
-              >
-                <Save size={15} /> Guardar
-              </button>
-              <button
-                onClick={handleTestSheets}
-                disabled={!sheetsUrl.trim() || sheetsTestState === 'testing'}
-                className="inline-flex items-center gap-2 rounded-2xl bg-white/8 border border-white/10 px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/12 disabled:opacity-40"
-              >
-                {sheetsTestState === 'testing' ? <Loader2 size={13} className="animate-spin" /> :
-                 sheetsTestState === 'ok' ? <CheckCircle size={13} className="text-emerald-400" /> :
-                 sheetsTestState === 'fail' ? <XCircle size={13} className="text-rose-400" /> :
-                 <CheckCircle size={13} />}
-                {sheetsTestState === 'testing' ? 'Probando...' : 'Probar conexión'}
-              </button>
-            </div>
-            {sheetsTestState === 'ok' && <p className="text-[11px] text-emerald-400">{sheetsTestMsg}</p>}
-            {sheetsTestState === 'fail' && <p className="text-[11px] text-rose-400">{sheetsTestMsg}</p>}
           </div>
         </section>
 

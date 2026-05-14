@@ -1,15 +1,15 @@
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PageHeader } from '@/components/layout/PageContainer'
-import { Plus, Edit, Trash2, X, Camera, TrendingUp, TrendingDown, Sparkles, RefreshCw, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react'
+import { Plus, Edit, Trash2, X, TrendingUp, TrendingDown, Sparkles, RefreshCw, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react'
 import {
   subscribeWealthAssets,
   subscribePatrimonioSnapshots,
   addWealthAsset,
   updateWealthAsset,
   deleteWealthAsset,
-  savePatrimonioSnapshot,
-  seedDefaultAssetsIfEmpty,
+  syncFromSheets,
+  getLastSyncDate,
   calcTotal,
   calcBreakdown,
   getWealthAnalysis,
@@ -29,9 +29,6 @@ import type {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const LAST_CAPTURE_KEY = 'patrimonio_last_capture'
-const REMINDER_DAYS    = 28
-
 const ACTIVO_CFG = {
   Liquidez:       { color: '#F59E0B', text: 'text-amber-400',   bg: 'bg-amber-500/15',   border: 'border-amber-500/25',   label: '💵 Liquidez',        bar: 'bg-amber-500' },
   'Renta Fija':   { color: '#3B82F6', text: 'text-blue-400',    bg: 'bg-blue-500/15',    border: 'border-blue-500/25',    label: '📊 Renta Fija',      bar: 'bg-blue-500' },
@@ -41,9 +38,8 @@ const ACTIVO_CFG = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function daysSince(iso: string | null): number | null {
-  if (!iso) return null
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
+function daysBetween(a: Date, b: Date): number {
+  return Math.floor((b.getTime() - a.getTime()) / 86400000)
 }
 
 function fmtDelta(val: number, prefix = true): string {
@@ -53,15 +49,6 @@ function fmtDelta(val: number, prefix = true): string {
 
 function fmtPct(pct: number): string {
   return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((res, rej) => {
-    const reader = new FileReader()
-    reader.onload = () => res((reader.result as string).split(',')[1])
-    reader.onerror = rej
-    reader.readAsDataURL(file)
-  })
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -352,7 +339,7 @@ function AnalysisDisplay({ analysis, onForce, loading }: {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 type SortKey = 'nombre' | 'plataforma' | 'tipoActivo' | 'valor' | 'pct'
-type Modal = 'none' | 'capture' | 'asset' | 'analysis'
+type Modal = 'none' | 'asset'
 
 export function PatrimonioPage() {
   const [assets, setAssets]               = useState<WealthAsset[]>([])
@@ -361,18 +348,10 @@ export function PatrimonioPage() {
   const [activeModal, setActiveModal]     = useState<Modal>('none')
   const [editingAsset, setEditingAsset]   = useState<WealthAsset | null>(null)
 
-  // Monthly capture modal state
-  const [captureValues, setCaptureValues] = useState<Record<string, string>>({})
-  const [savingCapture, setSavingCapture] = useState(false)
-  const [scanningImage, setScanningImage] = useState(false)
-  const [scanError, setScanError]         = useState<string | null>(null)
-  const fileInputRef                      = useRef<HTMLInputElement>(null)
-
-  // Sheets import state
-  const [importMode, setImportMode]   = useState<'sheets' | 'image'>('sheets')
-  const [sheetsUrl, setSheetsUrl]     = useState(() => localStorage.getItem('lifepilot_sheets_url') ?? '')
-  const [sheetsLoading, setSheetsLoading] = useState(false)
-  const [sheetsError, setSheetsError] = useState<string | null>(null)
+  // Sheets sync state
+  const [syncLoading, setSyncLoading]   = useState(false)
+  const [syncError, setSyncError]       = useState<string | null>(null)
+  const [lastSyncDate, setLastSyncDate] = useState<Date | null>(() => getLastSyncDate())
 
   // Add/edit asset modal state
   const [formNombre, setFormNombre]       = useState('')
@@ -392,11 +371,22 @@ export function PatrimonioPage() {
   const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [showAnalysis, setShowAnalysis]   = useState(false)
 
-  // Mount: seed, subscribe
+  // Mount: subscribe + auto-sync if stale
   useEffect(() => {
-    seedDefaultAssetsIfEmpty()
     const unsubA = subscribeWealthAssets(a => { setAssets(a); setLoading(false) })
     const unsubS = subscribePatrimonioSnapshots(setSnapshots)
+
+    const lastSync = getLastSyncDate()
+    const daysSince = lastSync ? daysBetween(lastSync, new Date()) : null
+    const isFirst = new Date().getDate() === 1
+    if (daysSince === null || daysSince > 28 || isFirst) {
+      setSyncLoading(true)
+      syncFromSheets()
+        .then(() => setLastSyncDate(new Date()))
+        .catch(e => setSyncError(e instanceof Error ? e.message : 'Error al sincronizar'))
+        .finally(() => setSyncLoading(false))
+    }
+
     return () => { unsubA(); unsubS() }
   }, [])
 
@@ -417,11 +407,6 @@ export function PatrimonioPage() {
     return total - firstSnapshot.totalEUR
   }, [total, firstSnapshot])
 
-  // Monthly reminder
-  const lastCapture = localStorage.getItem(LAST_CAPTURE_KEY)
-  const daysSinceCapture = daysSince(lastCapture)
-  const showReminder = daysSinceCapture === null || daysSinceCapture > REMINDER_DAYS
-
   // Sorted table
   const sortedAssets = useMemo(() => {
     const t = calcTotal(assets) || 1
@@ -437,81 +422,16 @@ export function PatrimonioPage() {
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
-  function openCapture() {
-    const init: Record<string, string> = {}
-    assets.forEach(a => { init[a.id] = String(a.valor) })
-    setCaptureValues(init)
-    setScanError(null)
-    setSheetsError(null)
-    setActiveModal('capture')
-  }
-
-  // ── Sheets helpers ────────────────────────────────────────────────────────
-
-  function extractSheetId(url: string): string | null {
-    const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
-    return m?.[1] ?? null
-  }
-
-  function parseSimpleCSV(csv: string): string[][] {
-    return csv.split('\n').filter(l => l.trim()).map(line => {
-      const row: string[] = []
-      let cell = '', inQ = false
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i]
-        if (ch === '"') { if (inQ && line[i + 1] === '"') { cell += '"'; i++ } else inQ = !inQ }
-        else if (ch === ',' && !inQ) { row.push(cell.trim()); cell = '' }
-        else cell += ch
-      }
-      row.push(cell.trim())
-      return row
-    })
-  }
-
-  async function handleSheetsSync() {
-    const url = sheetsUrl.trim()
-    if (!url) { setSheetsError('Pega la URL de tu Google Sheets'); return }
-    const sheetId = extractSheetId(url)
-    if (!sheetId) { setSheetsError('URL no válida — copia la URL completa de Google Sheets'); return }
-    setSheetsLoading(true); setSheetsError(null)
+  async function handleSyncFromSheets() {
+    setSyncLoading(true)
+    setSyncError(null)
     try {
-      const res = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`)
-      if (!res.ok) throw new Error(`Error ${res.status} — Verifica que la hoja esté compartida como "Cualquiera con el enlace"`)
-      const csv = await res.text()
-      const rows = parseSimpleCSV(csv)
-      if (rows.length < 2) throw new Error('La hoja está vacía o no contiene datos')
-
-      const headers = rows[0].map(h => h.toLowerCase().replace(/['"]/g, '').trim())
-      const findCol = (...names: string[]) => headers.findIndex(h => names.some(n => h.includes(n)))
-      const nombreCol = findCol('nombre', 'activo', 'name', 'asset', 'producto')
-      const valorCol  = findCol('valor', 'value', 'importe', 'saldo', 'precio', 'cantidad')
-
-      if (nombreCol < 0 || valorCol < 0) {
-        throw new Error(`No se encontraron columnas "Nombre" y "Valor". Cabeceras detectadas: ${rows[0].join(', ')}`)
-      }
-
-      const newValues = { ...captureValues }
-      let matched = 0
-      rows.slice(1).forEach(row => {
-        const nombre = row[nombreCol]?.trim()
-        const raw = row[valorCol]?.trim().replace(/[€$£\s]/g, '').replace(/,(?=\d{3})/g, '').replace(',', '.')
-        const valor = parseFloat(raw)
-        if (!nombre || isNaN(valor) || valor <= 0) return
-        const asset = assets.find(a =>
-          a.nombre.toLowerCase().includes(nombre.toLowerCase()) ||
-          nombre.toLowerCase().includes(a.nombre.toLowerCase().split(' ')[0])
-        )
-        if (asset) { newValues[asset.id] = String(valor); matched++ }
-      })
-
-      if (matched === 0) throw new Error('Ningún activo de la hoja coincide con tus activos registrados')
-      setCaptureValues(newValues)
-      localStorage.setItem('lifepilot_sheets_url', url)
-      setSheetsError(null)
+      await syncFromSheets()
+      setLastSyncDate(new Date())
     } catch (e) {
-      setSheetsError(e instanceof Error ? e.message : 'Error al conectar con Google Sheets')
+      setSyncError(e instanceof Error ? e.message : 'Error al sincronizar con Google Sheets')
     }
-    setSheetsLoading(false)
+    setSyncLoading(false)
   }
 
   function openAddAsset() {
@@ -545,44 +465,6 @@ export function PatrimonioPage() {
   async function handleDeleteAsset(id: string) {
     if (!confirm('¿Eliminar este activo?')) return
     await deleteWealthAsset(id)
-  }
-
-  async function handleSaveCapture() {
-    setSavingCapture(true)
-    const updates = assets.filter(a => captureValues[a.id] && Number(captureValues[a.id]) !== a.valor)
-    await Promise.all(updates.map(a => updateWealthAsset(a.id, { valor: Number(captureValues[a.id]) })))
-    const updatedAssets = assets.map(a => ({ ...a, valor: captureValues[a.id] ? Number(captureValues[a.id]) : a.valor }))
-    await savePatrimonioSnapshot(updatedAssets)
-    localStorage.setItem(LAST_CAPTURE_KEY, new Date().toISOString())
-    setSavingCapture(false)
-    setActiveModal('none')
-  }
-
-  async function handleImageScan(file: File) {
-    if (!hasAnyAIKey()) { setScanError('Configura una API key de Gemini en Ajustes para usar esta función.'); return }
-    setScanningImage(true); setScanError(null)
-    try {
-      const base64 = await fileToBase64(file)
-      const prompt = `Analiza esta imagen de un portfolio o tabla de patrimonio financiero. Extrae cada activo visible con su nombre, valor numérico en euros, plataforma y tipo de producto. Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
-[{"nombre":"string","valor":number,"plataforma":"string","tipoProducto":"string"}]`
-      const raw = await callAI(prompt, { data: base64, mimeType: file.type }, true, 1000)
-      const match = raw.match(/\[[\s\S]*\]/)
-      if (!match) throw new Error('No se pudo extraer datos de la imagen')
-      const parsed = JSON.parse(match[0]) as { nombre: string; valor: number; plataforma: string }[]
-      // Match each parsed item to an existing asset by name similarity
-      const newValues = { ...captureValues }
-      parsed.forEach(item => {
-        const matched = assets.find(a =>
-          a.nombre.toLowerCase().includes(item.nombre.toLowerCase()) ||
-          item.nombre.toLowerCase().includes(a.nombre.toLowerCase())
-        )
-        if (matched && item.valor > 0) newValues[matched.id] = String(item.valor)
-      })
-      setCaptureValues(newValues)
-    } catch (e) {
-      setScanError(e instanceof Error ? e.message : 'Error al analizar la imagen')
-    }
-    setScanningImage(false)
   }
 
   async function loadOrGenerateAnalysis(force = false) {
@@ -658,30 +540,48 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
     )
   }
 
+  const daysSinceSync = lastSyncDate ? daysBetween(lastSyncDate, new Date()) : null
+
   return (
     <div className="px-4 py-6 md:px-6 lg:px-8 max-w-5xl mx-auto space-y-5">
 
-      {/* Monthly reminder banner */}
+      {/* Sync status banner */}
       <AnimatePresence>
-        {showReminder && assets.length > 0 && (
+        {syncLoading && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="rounded-2xl border border-amber-500/30 bg-amber-500/8 px-5 py-3 flex items-center gap-3"
+            key="syncing"
+            initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+            className="rounded-2xl border border-blue-500/25 bg-blue-500/8 px-5 py-3 flex items-center gap-3"
           >
-            <span className="text-xl">📸</span>
-            <p className="text-sm text-amber-200/80 flex-1">
-              {daysSinceCapture === null
-                ? 'Aún no has registrado tu patrimonio. ¡Empieza ahora!'
-                : `Han pasado ${daysSinceCapture} días desde tu último registro de patrimonio`}
+            <motion.div
+              animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+              className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full shrink-0"
+            />
+            <p className="text-sm text-blue-200/80">Sincronizando desde Google Sheets...</p>
+          </motion.div>
+        )}
+        {!syncLoading && syncError && (
+          <motion.div
+            key="sync-error"
+            initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+            className="rounded-2xl border border-red-500/25 bg-red-500/8 px-5 py-3 flex items-center gap-3"
+          >
+            <AlertTriangle size={15} className="text-red-400 shrink-0" />
+            <p className="text-sm text-red-300/80 flex-1">{syncError}</p>
+            <button onClick={() => setSyncError(null)} className="text-xs text-white/30 hover:text-white/60 transition shrink-0">✕</button>
+          </motion.div>
+        )}
+        {!syncLoading && !syncError && lastSyncDate && (
+          <motion.div
+            key="sync-ok"
+            initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+            className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 px-5 py-3 flex items-center gap-3"
+          >
+            <span className="text-base shrink-0">📊</span>
+            <p className="text-sm text-emerald-200/60">
+              Sincronizado desde Google Sheets
+              {daysSinceSync === 0 ? ' · Hoy' : daysSinceSync === 1 ? ' · Ayer' : ` · Hace ${daysSinceSync} días`}
             </p>
-            <button
-              onClick={openCapture}
-              className="shrink-0 px-4 py-1.5 rounded-xl bg-amber-500 text-[#09090E] text-sm font-semibold hover:bg-amber-400 transition"
-            >
-              Actualizar ahora
-            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -689,15 +589,16 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
       <PageHeader
         breadcrumb="Finanzas · Inversiones"
         title="Patrimonio"
-        subtitle={lastSnapshot ? `Último registro: ${lastSnapshot.date}` : undefined}
+        subtitle={lastSyncDate ? `Datos de Google Sheets · ${lastSyncDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}` : undefined}
         actions={
           <div className="flex gap-2">
             <button
-              onClick={openCapture}
-              disabled={assets.length === 0}
+              onClick={handleSyncFromSheets}
+              disabled={syncLoading}
               className="inline-flex items-center gap-2 rounded-2xl bg-white/8 border border-white/10 px-4 py-2.5 text-sm font-medium text-white/70 hover:bg-white/12 transition disabled:opacity-40"
             >
-              <Camera size={14} /> Actualizar patrimonio
+              <RefreshCw size={14} className={syncLoading ? 'animate-spin' : ''} />
+              {syncLoading ? 'Sincronizando...' : 'Sincronizar'}
             </button>
             <button
               onClick={openAddAsset}
@@ -953,162 +854,6 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
           </div>
         )}
       </motion.div>
-
-      {/* ── MONTHLY CAPTURE MODAL ────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {activeModal === 'capture' && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
-            onClick={() => setActiveModal('none')}
-          >
-            <motion.div
-              initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-              className="w-full max-w-lg rounded-3xl border border-white/8 bg-[#1E1E28] max-h-[92vh] overflow-y-auto"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="sticky top-0 bg-[#1E1E28] border-b border-white/5 px-6 py-4 flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-semibold text-white/90">📊 Actualización mensual</h3>
-                  <p className="text-xs text-white/40 mt-0.5">Actualiza los valores actuales de cada activo</p>
-                </div>
-                <button onClick={() => setActiveModal('none')} className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center">
-                  <X size={14} className="text-white/60" />
-                </button>
-              </div>
-
-              <div className="px-6 py-4 space-y-4">
-
-                {/* Import mode toggle */}
-                <div className="flex gap-1 rounded-2xl bg-white/5 p-1">
-                  <button
-                    onClick={() => setImportMode('sheets')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-medium transition ${importMode === 'sheets' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/25' : 'text-white/40 hover:text-white/60'}`}
-                  >
-                    📊 Google Sheets
-                  </button>
-                  <button
-                    onClick={() => setImportMode('image')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-medium transition ${importMode === 'image' ? 'bg-white/12 text-white' : 'text-white/40 hover:text-white/60'}`}
-                  >
-                    📷 Subir imagen
-                  </button>
-                </div>
-
-                {/* Google Sheets import */}
-                {importMode === 'sheets' && (
-                  <div className="space-y-2">
-                    <div className="rounded-2xl bg-white/4 border border-white/6 p-3 text-xs text-white/50 leading-relaxed">
-                      <span className="text-white/70 font-medium">Cómo compartir: </span>
-                      Abre tu Sheets → Compartir → &quot;Cualquier persona con el enlace&quot; → Lector → Copia la URL
-                    </div>
-                    <input
-                      value={sheetsUrl}
-                      onChange={e => setSheetsUrl(e.target.value)}
-                      placeholder="https://docs.google.com/spreadsheets/d/..."
-                      className="w-full rounded-2xl bg-white/6 border border-white/10 px-3 py-2.5 text-sm text-white/70 focus:outline-none focus:border-amber-500/30 placeholder:text-white/25"
-                    />
-                    <button
-                      onClick={handleSheetsSync}
-                      disabled={sheetsLoading || !sheetsUrl.trim()}
-                      className="w-full flex items-center justify-center gap-2 rounded-2xl bg-amber-600 hover:bg-amber-500 py-2.5 text-sm font-semibold text-white transition disabled:opacity-50"
-                    >
-                      {sheetsLoading
-                        ? <><motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} className="w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> Sincronizando...</>
-                        : '📊 Sincronizar desde Sheets'
-                      }
-                    </button>
-                    {sheetsError && <p className="text-xs text-red-400">{sheetsError}</p>}
-                  </div>
-                )}
-
-                {/* Image scan */}
-                {importMode === 'image' && (
-                  <div>
-                    <input
-                      type="file" accept="image/*" ref={fileInputRef} className="hidden"
-                      onChange={e => { const f = e.target.files?.[0]; if (f) handleImageScan(f) }}
-                    />
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={scanningImage || !hasAnyAIKey()}
-                      className="w-full flex items-center justify-center gap-2 rounded-2xl border border-dashed border-white/15 hover:border-amber-500/40 py-3 text-sm text-white/50 hover:text-amber-400 transition disabled:opacity-40"
-                    >
-                      {scanningImage
-                        ? <><motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full" /> Analizando imagen...</>
-                        : <><Camera size={15} /> 📷 Subir captura de pantalla (IA)</>
-                      }
-                    </button>
-                    {scanError && <p className="mt-1.5 text-xs text-red-400">{scanError}</p>}
-                    {!hasAnyAIKey() && <p className="mt-1 text-xs text-white/30 text-center">Configura Gemini en Ajustes para escanear imágenes</p>}
-                  </div>
-                )}
-
-                {/* Asset rows */}
-                <div className="space-y-2">
-                  {assets.map(asset => {
-                    const prev = asset.valor
-                    const curr = captureValues[asset.id] ? Number(captureValues[asset.id]) : prev
-                    const delta = curr - prev
-                    const deltaPct = prev > 0 ? (delta / prev) * 100 : 0
-                    const cfg = ACTIVO_CFG[asset.tipoActivo]
-                    return (
-                      <div key={asset.id} className="rounded-2xl bg-white/4 border border-white/6 p-3">
-                        <div className="flex items-start gap-3">
-                          <div className={`w-8 h-8 rounded-xl ${cfg.bg} flex items-center justify-center shrink-0 mt-0.5 text-sm`}>
-                            {asset.tipoActivo === 'Liquidez' ? '💵' : asset.tipoActivo === 'Renta Fija' ? '📊' : asset.tipoActivo === 'Cripto' ? '₿' : '📈'}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-white/80 font-medium truncate">{asset.nombre}</p>
-                            <p className="text-xs text-white/35">{asset.plataforma}</p>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <input
-                              type="number"
-                              value={captureValues[asset.id] ?? asset.valor}
-                              onChange={e => setCaptureValues(v => ({ ...v, [asset.id]: e.target.value }))}
-                              step="0.01"
-                              className="w-28 rounded-xl bg-white/6 border border-white/10 px-3 py-1.5 text-sm text-right text-white/80 focus:outline-none focus:border-amber-500/40"
-                            />
-                            {delta !== 0 && captureValues[asset.id] && (
-                              <p className={`text-xs mt-1 font-medium ${delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {delta > 0 ? '+' : ''}{fmtEur(delta, 2)} ({deltaPct > 0 ? '+' : ''}{deltaPct.toFixed(1)}%)
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* Total preview */}
-                <div className="rounded-2xl bg-amber-500/8 border border-amber-500/20 p-3 flex items-center justify-between">
-                  <span className="text-sm text-white/60">Nuevo total estimado</span>
-                  <span className="text-lg font-bold text-amber-400">
-                    {fmtEur(assets.reduce((s, a) => s + (captureValues[a.id] ? Number(captureValues[a.id]) : a.valor), 0), 0)}
-                  </span>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleSaveCapture}
-                    disabled={savingCapture}
-                    className="flex-1 rounded-2xl bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold py-3 transition disabled:opacity-50"
-                  >
-                    {savingCapture ? 'Guardando...' : '💾 Guardar snapshot'}
-                  </button>
-                  <button onClick={() => setActiveModal('none')} className="px-5 py-3 text-sm text-white/50 hover:text-white/70 transition">
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* ── ADD/EDIT ASSET MODAL ─────────────────────────────────────────────── */}
       <AnimatePresence>

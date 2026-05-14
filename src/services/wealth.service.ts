@@ -33,6 +33,120 @@ const ANALYSIS_COL      = 'wealth_analysis'
 
 const USD_TO_EUR = 0.92
 
+// ── Google Sheets sync (fixed sheet) ────────────────────────────────────────
+const SHEETS_ID      = '19DCE3rGofq54kFhtbE9NsDzB8K4LxsbPVLzehGNom-o'
+const SHEETS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEETS_ID}/gviz/tq?tqx=out:csv`
+const SYNC_LS_KEY    = 'patrimonio_last_sheets_sync'
+
+function parseCSVRows(csv: string): string[][] {
+  return csv.split('\n').filter(l => l.trim()).map(line => {
+    const row: string[] = []
+    let cell = '', inQ = false
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (ch === '"') { if (inQ && line[i + 1] === '"') { cell += '"'; i++ } else inQ = !inQ }
+      else if (ch === ',' && !inQ) { row.push(cell.trim()); cell = '' }
+      else cell += ch
+    }
+    row.push(cell.trim())
+    return row
+  })
+}
+
+function parseEuro(raw: string): number {
+  const s = raw.replace(/[€$£\s"]/g, '').trim()
+  if (!s) return NaN
+  // Spanish format: 1.234,56 → dot=thousands, comma=decimal
+  if (s.includes(',')) return parseFloat(s.replace(/\./g, '').replace(',', '.'))
+  return parseFloat(s.replace(/,/g, ''))
+}
+
+export async function syncFromSheets(): Promise<WealthAsset[]> {
+  // Fetch CSV with CORS-proxy fallback
+  let csv: string
+  try {
+    const res = await fetch(SHEETS_CSV_URL)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    csv = await res.text()
+  } catch {
+    const proxied = `https://corsproxy.io/?${encodeURIComponent(SHEETS_CSV_URL)}`
+    const res = await fetch(proxied)
+    if (!res.ok) throw new Error(`Error ${res.status} al conectar con Google Sheets`)
+    csv = await res.text()
+  }
+
+  const rows = parseCSVRows(csv)
+  if (rows.length < 2) throw new Error('La hoja está vacía o no contiene datos')
+
+  const headers = rows[0].map(h => h.toLowerCase().replace(/['"]/g, '').trim())
+  const findCol = (...names: string[]) => headers.findIndex(h => names.some(n => h.includes(n)))
+
+  const nombreCol       = findCol('nombre', 'activo', 'name', 'asset')
+  const valorCol        = findCol('valor', 'value', 'importe', 'saldo')
+  const plataformaCol   = findCol('plataforma', 'platform', 'broker')
+  const tipoProductoCol = findCol('tipo producto', 'tipoproducto', 'producto', 'product')
+  const tipoActivoCol   = findCol('tipo activo', 'tipoactivo', 'tipo')
+
+  if (nombreCol < 0 || valorCol < 0) {
+    throw new Error(`Columnas "Nombre" y "Valor" no encontradas. Cabeceras: ${rows[0].join(', ')}`)
+  }
+
+  const VALID_TIPO_PRODUCTO: TipoProducto[] = [
+    'Liquidez', 'Renta Fija', 'Renta Variable', 'Mixto', 'Mixto (RV+RF)',
+    'Cripto', 'ETF Sectorial', 'ETF Global', 'REIT', 'Accion',
+  ]
+  const VALID_TIPO_ACTIVO: TipoActivo[] = ['Liquidez', 'Renta Fija', 'Renta Variable', 'Cripto']
+
+  // Delete all existing assets
+  const existing = await getDocs(collection(db, WEALTH_ASSETS_COL))
+  await Promise.all(existing.docs.map(d => deleteDoc(doc(db, WEALTH_ASSETS_COL, d.id))))
+
+  // Insert new assets from CSV rows
+  const newAssets: WealthAsset[] = []
+  const insertTasks = rows.slice(1).map(async row => {
+    const nombre = row[nombreCol]?.replace(/^"|"$/g, '').trim()
+    const valor  = parseEuro(row[valorCol] ?? '')
+    if (!nombre || isNaN(valor) || valor < 0) return
+
+    const plataforma = plataformaCol >= 0 ? (row[plataformaCol]?.replace(/^"|"$/g, '').trim() ?? '') : ''
+    const rawTP = tipoProductoCol >= 0 ? row[tipoProductoCol]?.replace(/^"|"$/g, '').trim() : ''
+    const rawTA = tipoActivoCol   >= 0 ? row[tipoActivoCol]?.replace(/^"|"$/g, '').trim()   : ''
+
+    const tipoActivo: TipoActivo = VALID_TIPO_ACTIVO.includes(rawTA as TipoActivo)
+      ? (rawTA as TipoActivo)
+      : rawTA?.includes('Fija') ? 'Renta Fija'
+      : rawTA?.includes('Variable') ? 'Renta Variable'
+      : rawTA?.toLowerCase().includes('cripto') ? 'Cripto'
+      : 'Renta Variable'
+
+    const tipoProducto: TipoProducto = VALID_TIPO_PRODUCTO.includes(rawTP as TipoProducto)
+      ? (rawTP as TipoProducto)
+      : tipoActivo === 'Liquidez' ? 'Liquidez'
+      : tipoActivo === 'Renta Fija' ? 'Renta Fija'
+      : tipoActivo === 'Cripto' ? 'Cripto'
+      : 'Renta Variable'
+
+    const ref = await addDoc(collection(db, WEALTH_ASSETS_COL), {
+      nombre, plataforma, tipoProducto, tipoActivo, valor, updatedAt: serverTimestamp(),
+    })
+    newAssets.push({ id: ref.id, nombre, plataforma, tipoProducto, tipoActivo, valor, updatedAt: new Date() })
+  })
+  await Promise.all(insertTasks)
+
+  // Save snapshot and sync timestamp
+  if (newAssets.length > 0) await savePatrimonioSnapshot(newAssets)
+  localStorage.setItem(SYNC_LS_KEY, new Date().toISOString())
+
+  return newAssets
+}
+
+export function getLastSyncDate(): Date | null {
+  const raw = localStorage.getItem(SYNC_LS_KEY)
+  if (!raw) return null
+  const d = new Date(raw)
+  return isNaN(d.getTime()) ? null : d
+}
+
 // ── Legacy functions (kept for backward compatibility) ───────────────────────
 export function calculateTotal(assets: Asset[]): number {
   return assets.reduce((sum, a) => sum + (a.currency === 'EUR' ? a.value : a.value * USD_TO_EUR), 0)
