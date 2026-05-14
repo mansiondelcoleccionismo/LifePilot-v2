@@ -243,7 +243,6 @@ function RecDetailModal({
       setDetailsLoading(true)
       try {
         // 1. Search for tmdbId
-        const year = rec.año > 0 ? rec.año : undefined
         let results = await searchContent(rec.titulo, type)
 
         // 2. Try original title if no results
@@ -624,7 +623,7 @@ Escribe exactamente 2 frases en español:
 
 Tono: amigo cinéfilo cercano. Sin formato, sin asteriscos, solo texto.`
 
-      const resp = await callAI(prompt, undefined, true, 300)
+      const resp = await callAI(prompt, undefined, true, 600)
       addMsg({ role: 'sommelier', text: cleanText(resp) })
     } catch {
       addMsg({ role: 'sommelier', text: `Buenas noches. ${lastWatched[0] ? `Vi que terminaste ${lastWatched[0].title}, buen gusto.` : '¿Qué te apetece esta noche?'} Dime qué te pide el cuerpo o pulsa uno de los chips de abajo.` })
