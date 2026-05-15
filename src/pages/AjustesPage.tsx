@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { User, Key, Apple, Palette, Database, Save, Download, Loader2, Bell, Activity, Eye, EyeOff, Film, LogOut, RefreshCw, CheckCircle, XCircle, Droplets } from 'lucide-react'
+import { User, Key, Apple, Palette, Database, Save, Download, Loader2, Bell, Activity, Eye, EyeOff, Film, LogOut, RefreshCw, CheckCircle, XCircle, Droplets, ChevronDown, ChevronRight } from 'lucide-react'
 import { getBaseHydrationTarget, setBaseHydrationTarget } from '@/services/hydration.service'
 import { useAuthStore } from '@/store/auth.store'
 import { useGoogleAuth } from '@/hooks/useGoogleAuth'
@@ -92,8 +92,62 @@ const defaultProfile: ProfileData = {
 
 const defaultMacros: CustomMacros = { ...DAY_TARGETS }
 
+const MODULE_DOCS = [
+  {
+    id: 'nutricion', emoji: '🥗', title: 'Nutrición',
+    content: `Los macros se calculan automáticamente según el tipo de día (Normal/Volumen/Déficit/Descanso). El tipo de día se detecta automáticamente: Lunes/Miércoles=Pádel, Martes/Jueves/Sábado=Pesas, Viernes/Domingo=Descanso. Puedes cambiarlo manualmente.
+
+Los favoritos se ordenan por frecuencia de uso. Puedes editar días anteriores con las flechas de fecha.`,
+  },
+  {
+    id: 'patrimonio', emoji: '💰', title: 'Patrimonio',
+    content: `Los datos se sincronizan automáticamente desde tu Google Sheets cada 28 días. El Sheets es: docs.google.com/spreadsheets/d/19DCE3rGofq54kFhtbE9NsDzB8K4LxsbPVLzehGNom-o
+
+La pestaña que se lee es ACTIVOS con columnas: Nombre, Valor (€), Plataforma, Tipo Producto, Tipo Activo.
+
+Pulsa "Sincronizar ahora" para forzar una actualización manual. El análisis IA se regenera cada 7 días o al forzarlo manualmente.`,
+  },
+  {
+    id: 'ejercicios', emoji: '🏋️', title: 'Ejercicios',
+    content: `El programa es de 4 días/semana: Lunes=Pádel (descanso pesas), Martes=Bíceps/Espalda, Miércoles=Pádel+Empuje, Jueves=Piernas+Core, Viernes=Descanso, Sábado=Empuje, Domingo=Descanso.
+
+El Handgrip se hace Martes, Jueves y Sábado. La progresión de peso es automática: cuando completas 3×12 dos semanas seguidas la app te avisa de subir peso.`,
+  },
+  {
+    id: 'calendario', emoji: '📅', title: 'Calendario',
+    content: `Los eventos vienen de tu calendario iCloud via URL pública. Se actualiza cada 15 minutos automáticamente.
+
+Para cambiar el calendario ve a iPhone → Calendario → tu calendario → Compartir → Copiar enlace y pégalo en Ajustes.`,
+  },
+  {
+    id: 'kira', emoji: '👧', title: 'Kira',
+    content: `Los días con Kira son Martes y Jueves. Las actividades se sugieren según el tiempo de Pedrola y el historial de actividades anteriores.
+
+Marca cada actividad como "Esto hicimos" para que la app aprenda qué le gusta más a Kira.`,
+  },
+  {
+    id: 'planes', emoji: '🗺️', title: 'Planes',
+    content: `Los planes se sugieren automáticamente según el tiempo del fin de semana en Pedrola y la temporada del año. El sistema detecta eventos especiales de Zaragoza (Fiestas del Pilar en octubre, Navidad en diciembre, etc).
+
+Marca "Este plan" cuando lo hagas para construir el historial.`,
+  },
+  {
+    id: 'ia', emoji: '🤖', title: 'IA',
+    content: `La IA usa datos reales de Firebase para generar insights. Necesita mínimo 7 días de datos registrados para detectar patrones.
+
+El briefing se genera automáticamente cada mañana. El informe semanal aparece los domingos a las 21h.`,
+  },
+  {
+    id: 'apikeys', emoji: '🔑', title: 'Ajustes API Keys',
+    content: `Las keys de Gemini se rotan automáticamente cuando una se agota. El orden es: Gemini Key 1 → Key 2 → Key 3 → Groq. Groq es el fallback final y es muy fiable.
+
+Las keys se guardan solo en tu navegador, nunca en servidores.`,
+  },
+]
+
 export function AjustesPage() {
   const [profile, setProfile] = useState<ProfileData>(defaultProfile)
+  const [openDoc, setOpenDoc] = useState<string | null>(null)
   const [aiKeyValues, setAiKeyValues] = useState<Record<string, string>>({})
   const [testStates, setTestStates] = useState<Record<string, 'idle' | 'testing' | 'ok' | string>>({})
   const [testErrors, setTestErrors] = useState<Record<string, string>>({})
@@ -1093,6 +1147,46 @@ export function AjustesPage() {
             >
               <Download size={16} /> Exportar datos
             </button>
+          </div>
+        </section>
+
+        {/* Cómo funciona cada módulo */}
+        <section className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 flex items-center justify-center">
+              <span className="text-lg">📖</span>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">Referencia</p>
+              <h2 className="text-lg font-semibold text-white/90 mt-1">Cómo funciona cada módulo</h2>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            {MODULE_DOCS.map(mod => (
+              <div key={mod.id} className="rounded-2xl border border-white/8 overflow-hidden">
+                <button
+                  onClick={() => setOpenDoc(prev => prev === mod.id ? null : mod.id)}
+                  className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-white/3 transition text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-base leading-none">{mod.emoji}</span>
+                    <span className="text-sm font-semibold text-white/80">{mod.title}</span>
+                  </div>
+                  {openDoc === mod.id
+                    ? <ChevronDown size={14} className="text-white/30 shrink-0" />
+                    : <ChevronRight size={14} className="text-white/30 shrink-0" />
+                  }
+                </button>
+                {openDoc === mod.id && (
+                  <div className="px-4 pb-4 pt-2 bg-white/2 border-t border-white/5">
+                    <p className="text-sm text-white/50 leading-relaxed whitespace-pre-line">
+                      {mod.content}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </section>
       </div>
