@@ -9,23 +9,31 @@ import {
   orderBy,
   where,
   serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { FoodEntry, MealType } from '@/types/nutrition'
 
 const COL = 'nutrition_entries'
 
-export function subscribeNutritionEntries(callback: (entries: FoodEntry[]) => void) {
-  const startOfDay = new Date()
-  startOfDay.setHours(0, 0, 0, 0)
+function dayRange(date: Date) {
+  const start = new Date(date)
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(date)
+  end.setHours(23, 59, 59, 999)
+  return { start, end }
+}
 
-  const endOfDay = new Date()
-  endOfDay.setHours(23, 59, 59, 999)
+export function subscribeNutritionEntries(
+  callback: (entries: FoodEntry[]) => void,
+  date?: Date,
+) {
+  const { start, end } = dayRange(date ?? new Date())
 
   const q = query(
     collection(db, COL),
-    where('createdAt', '>=', startOfDay),
-    where('createdAt', '<=', endOfDay),
+    where('createdAt', '>=', start),
+    where('createdAt', '<=', end),
     orderBy('createdAt', 'desc'),
   )
 
@@ -46,11 +54,13 @@ export async function addNutritionEntry(
   carbs: number,
   fat: number,
   meal?: MealType,
+  date?: Date,
 ) {
+  const createdAt = date ? Timestamp.fromDate(date) : serverTimestamp()
   await addDoc(collection(db, COL), {
     name, kcal, protein, carbs, fat,
     ...(meal ? { meal } : {}),
-    createdAt: serverTimestamp(),
+    createdAt,
   })
 }
 

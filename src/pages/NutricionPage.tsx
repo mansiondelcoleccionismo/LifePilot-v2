@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { PageHeader } from '@/components/layout/PageContainer'
 import {
   Search, Flame, Loader2, Bot, Trash2, X, Camera, Check, RotateCcw,
-  Star, ChevronDown, ChevronRight, Plus, Minus,
+  Star, ChevronDown, ChevronRight, Plus, Minus, ChevronLeft,
 } from 'lucide-react'
 import { addNutritionEntry, deleteNutritionEntry, subscribeNutritionEntries } from '@/services/nutrition.service'
 import { searchFoods, type OpenFoodResult } from '@/services/openfoodfacts.service'
@@ -14,6 +14,9 @@ import {
   initFavorites, getFavorites, addFavorite, removeFavorite, incrementUsage,
   sortByRelevance, type FoodFavorite,
 } from '@/services/favorites.service'
+import {
+  loadPatternData, type PatternData, type FrequentFood, type FoodCombo,
+} from '@/services/nutrition-patterns.service'
 import type { UserProfile } from '@/types/profile'
 import { NUTRITION_REFERENCE } from '@/data/nutrition-reference'
 
@@ -26,7 +29,6 @@ const MEALS: Array<{ value: MealType; label: string; emoji: string; hours: [numb
   { value: 'cena',     label: 'Cena',     emoji: '🌙', hours: [19, 23] },
 ]
 
-// Maps old meal values (from existing Firebase data) to new types
 const MEAL_REMAP: Record<string, MealType> = {
   media_manana: 'almuerzo',
   snack:        'cena',
@@ -49,6 +51,39 @@ function getMealLabel(meal: MealType) {
 
 function getDayTypeKey() {
   return `nutrition_daytype_${new Date().toISOString().split('T')[0]}`
+}
+
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function parseDateKey(key: string): Date {
+  const [y, m, d] = key.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+function isToday(key: string): boolean {
+  return key === dateKey(new Date())
+}
+
+function isYesterday(key: string): boolean {
+  const y = new Date()
+  y.setDate(y.getDate() - 1)
+  return key === dateKey(y)
+}
+
+function formatDateLabel(key: string): string {
+  if (isToday(key)) return 'Hoy'
+  if (isYesterday(key)) return 'Ayer'
+  const d = parseDateKey(key)
+  return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+function noonOf(key: string): Date {
+  const d = parseDateKey(key)
+  d.setHours(13, 0, 0, 0)
+  return d
 }
 
 // ─── Confirm food interface ────────────────────────────────────────────────
@@ -114,7 +149,13 @@ interface AIFoodResult {
   desglose: Array<{ nombre: string; gramos: number; kcal: number; protein?: number; carbs?: number; fat?: number }>
 }
 
-function AIFoodModal({ onClose }: { onClose: () => void }) {
+function AIFoodModal({
+  onClose, onAdded, targetDate,
+}: {
+  onClose: () => void
+  onAdded?: () => void
+  targetDate?: Date
+}) {
   const [step, setStep] = useState<'input' | 'loading' | 'result' | 'error'>('input')
   const [input, setInput] = useState('')
   const [result, setResult] = useState<AIFoodResult | null>(null)
@@ -150,9 +191,6 @@ Responde ÚNICAMENTE con JSON sin texto adicional:
 
       const responseText = await callAI(prompt, undefined, true)
 
-      console.log('Respuesta IA raw:', responseText)
-
-      // Robust JSON extraction: strip markdown fences, isolate first { ... last }
       let cleaned = responseText
         .replace(/```json\s*/gi, '')
         .replace(/```\s*/g, '')
@@ -167,35 +205,27 @@ Responde ÚNICAMENTE con JSON sin texto adicional:
       try {
         parsed = JSON.parse(cleaned) as AIFoodResult
       } catch (parseErr) {
-        console.error('JSON.parse error:', parseErr, '\nTexto limpio:', cleaned)
         throw new Error(`Parse error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`)
       }
 
-      // ── Validación y corrección de totales ───────────────────────────────────
-      const warnings: string[] = []
-
+      const warns: string[] = []
       if (parsed.desglose?.length > 0) {
-        // Recalculate totals from breakdown if discrepancy > 20%
         const sumKcal    = parsed.desglose.reduce((s, d) => s + (d.kcal    ?? 0), 0)
         const sumProtein = parsed.desglose.reduce((s, d) => s + (d.protein ?? 0), 0)
         const sumCarbs   = parsed.desglose.reduce((s, d) => s + (d.carbs   ?? 0), 0)
         const sumFat     = parsed.desglose.reduce((s, d) => s + (d.fat     ?? 0), 0)
-
         if (parsed.kcal > 0 && Math.abs(sumKcal - parsed.kcal) / parsed.kcal > 0.2) {
-          console.warn(`Discrepancia kcal: total=${parsed.kcal}, suma desglose=${sumKcal} → usando suma`)
           parsed = { ...parsed, kcal: Math.round(sumKcal), protein: Math.round(sumProtein * 10) / 10, carbs: Math.round(sumCarbs * 10) / 10, fat: Math.round(sumFat * 10) / 10 }
         }
       }
+      if (parsed.kcal > 2000) warns.push('⚠️ Calorías muy altas, revisa el desglose')
+      if (parsed.protein > 100) warns.push('⚠️ Proteína muy alta, revisa el desglose')
 
-      if (parsed.kcal > 2000) warnings.push('⚠️ Calorías muy altas, revisa el desglose')
-      if (parsed.protein > 100) warnings.push('⚠️ Proteína muy alta, revisa el desglose')
-
-      setWarnings(warnings)
+      setWarnings(warns)
       setResult(parsed)
       setStep('result')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      console.error('AIFoodModal error:', msg)
       setError(msg.includes('Sin créditos') || msg.includes('Groq') || msg.includes('Gemini') || msg.includes('HTTP')
         ? msg
         : `No he podido calcular los macros: ${msg}`)
@@ -213,8 +243,10 @@ Responde ÚNICAMENTE con JSON sin texto adicional:
       Math.round(result.carbs * 10) / 10,
       Math.round(result.fat * 10) / 10,
       meal,
+      targetDate,
     )
     setAdding(false)
+    onAdded?.()
     onClose()
   }
 
@@ -291,10 +323,10 @@ Responde ÚNICAMENTE con JSON sin texto adicional:
 
               <div className="grid grid-cols-4 gap-2">
                 {[
-                  { l: 'Kcal',  v: String(Math.round(result.kcal)),            c: 'text-orange-400', bg: 'bg-orange-500/8 border-orange-500/15' },
-                  { l: 'Prot',  v: `${Math.round(result.protein)}g`,           c: 'text-blue-400',   bg: 'bg-blue-500/8 border-blue-500/15' },
-                  { l: 'Carbs', v: `${Math.round(result.carbs)}g`,             c: 'text-amber-400',  bg: 'bg-amber-500/8 border-amber-500/15' },
-                  { l: 'Grasa', v: `${Math.round(result.fat)}g`,               c: 'text-rose-400',   bg: 'bg-rose-500/8 border-rose-500/15' },
+                  { l: 'Kcal',  v: String(Math.round(result.kcal)),  c: 'text-orange-400', bg: 'bg-orange-500/8 border-orange-500/15' },
+                  { l: 'Prot',  v: `${Math.round(result.protein)}g`, c: 'text-blue-400',   bg: 'bg-blue-500/8 border-blue-500/15' },
+                  { l: 'Carbs', v: `${Math.round(result.carbs)}g`,   c: 'text-amber-400',  bg: 'bg-amber-500/8 border-amber-500/15' },
+                  { l: 'Grasa', v: `${Math.round(result.fat)}g`,     c: 'text-rose-400',   bg: 'bg-rose-500/8 border-rose-500/15' },
                 ].map(m => (
                   <div key={m.l} className={`rounded-xl border p-2.5 text-center ${m.bg}`}>
                     <p className={`text-sm font-bold ${m.c}`}>{m.v}</p>
@@ -361,7 +393,14 @@ Responde ÚNICAMENTE con JSON sin texto adicional:
 }
 
 // ─── PhotoModal ───────────────────────────────────────────────────────────────
-function PhotoModal({ onClose, onAddedMeal }: { onClose: () => void; onAddedMeal: MealType }) {
+function PhotoModal({
+  onClose, onAdded, onAddedMeal, targetDate,
+}: {
+  onClose: () => void
+  onAdded?: () => void
+  onAddedMeal: MealType
+  targetDate?: Date
+}) {
   const [step, setStep] = useState<'select' | 'preview' | 'analyzing' | 'result' | 'error'>('select')
   const [file, setFile]       = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
@@ -407,9 +446,11 @@ function PhotoModal({ onClose, onAddedMeal }: { onClose: () => void; onAddedMeal
         Math.round(food.carbs * 10) / 10,
         Math.round(food.fat * 10) / 10,
         meal,
+        targetDate,
       )
     }
     setAdding(false)
+    onAdded?.()
     onClose()
   }
 
@@ -501,7 +542,6 @@ function PhotoModal({ onClose, onAddedMeal }: { onClose: () => void; onAddedMeal
                 <p className="text-[10px] uppercase tracking-widest text-violet-400/60 mb-1">Detectado</p>
                 <p className="text-sm text-white/80">{result.descripcion}</p>
               </div>
-              {/* Meal selector */}
               <div>
                 <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">Añadir a</p>
                 <div className="flex gap-1.5 flex-wrap">
@@ -619,13 +659,14 @@ function FoodThumb({ imageUrl, emoji, size = 'sm' }: { imageUrl?: string; emoji?
 
 // ─── ConfirmModal ─────────────────────────────────────────────────────────────
 function ConfirmModal({
-  food, onClose, onAdded, favorites, onFavoritesChange,
+  food, onClose, onAdded, favorites, onFavoritesChange, targetDate,
 }: {
   food: ConfirmFood
   onClose: () => void
   onAdded: () => void
   favorites: FoodFavorite[]
   onFavoritesChange: () => void
+  targetDate?: Date
 }) {
   const [grams, setGrams] = useState(food.defaultGrams.toString())
   const [meal, setMeal] = useState<MealType>(getMealForTime())
@@ -656,7 +697,7 @@ function ConfirmModal({
     setAdding(true)
     const name = Number(grams) !== food.defaultGrams
       ? `${food.name} (${grams}g)` : food.name
-    await addNutritionEntry(name, macros.kcal, macros.protein, macros.carbs, macros.fat, meal)
+    await addNutritionEntry(name, macros.kcal, macros.protein, macros.carbs, macros.fat, meal, targetDate)
     if (favId) {
       localStorage.setItem(`lp_lastgrams_${favId}`, grams)
       await incrementUsage(favId)
@@ -699,7 +740,6 @@ function ConfirmModal({
         transition={{ type: 'spring', damping: 28, stiffness: 340 }}
         className="w-full sm:max-w-sm bg-[#13131b] rounded-t-3xl sm:rounded-3xl border-t sm:border border-white/10 overflow-hidden"
       >
-        {/* Food header */}
         <div className="flex items-center gap-4 px-5 pt-6 pb-4">
           <FoodThumb imageUrl={food.imageUrl} emoji={food.emoji} size="lg" />
           <div className="flex-1 min-w-0">
@@ -718,7 +758,6 @@ function ConfirmModal({
         </div>
 
         <div className="px-5 pb-6 space-y-5">
-          {/* Grams input */}
           <div>
             <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">Cantidad</p>
             <div className="flex items-center gap-3">
@@ -740,7 +779,6 @@ function ConfirmModal({
                 <Plus size={16} className="text-white/60" />
               </button>
             </div>
-            {/* Quick amounts */}
             <div className="flex gap-1.5 mt-2 flex-wrap">
               {[food.defaultGrams, 50, 100, 150, 200].filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => a - b).slice(0, 5).map(g => (
                 <button key={g} onClick={() => setGrams(String(g))}
@@ -751,7 +789,6 @@ function ConfirmModal({
             </div>
           </div>
 
-          {/* Meal selector */}
           <div>
             <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">Comida</p>
             <div className="flex gap-1.5 flex-wrap">
@@ -764,7 +801,6 @@ function ConfirmModal({
             </div>
           </div>
 
-          {/* Actions */}
           <div className="flex gap-2 pt-1">
             <button onClick={handleAdd} disabled={adding || !macros}
               className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-500 transition disabled:opacity-40 flex items-center justify-center gap-2">
@@ -782,6 +818,136 @@ function ConfirmModal({
   )
 }
 
+// ─── SuggestionsBanner ────────────────────────────────────────────────────────
+function SuggestionsBanner({
+  patternData, dayType, proteinTarget, onAddFoods, onGoToYesterday, onDismiss,
+}: {
+  patternData: PatternData
+  dayType: DayType
+  proteinTarget: number
+  onAddFoods: (foods: FrequentFood[], meal: MealType) => Promise<void>
+  onGoToYesterday: (meal?: MealType) => void
+  onDismiss: () => void
+}) {
+  const [adding, setAdding] = useState(false)
+  const hour = new Date().getHours()
+
+  const hadMorningYesterday =
+    patternData.yesterdayMeals.has('desayuno') || patternData.yesterdayMeals.has('almuerzo')
+  const missedCena =
+    hadMorningYesterday &&
+    !patternData.yesterdayMeals.has('cena') &&
+    patternData.frequentFoods.cena.length >= 2
+
+  const breakfastFoods = patternData.frequentFoods.desayuno.slice(0, 3)
+  const yesterdayComida = patternData.yesterdayByMeal.comida
+
+  type BannerCase = 'missing_meal' | 'breakfast' | 'yesterday_comida' | 'training'
+  let activeCase: BannerCase | null = null
+  if (missedCena) activeCase = 'missing_meal'
+  else if (hour >= 8 && hour < 10 && breakfastFoods.length >= 2) activeCase = 'breakfast'
+  else if (hour >= 13 && hour < 15 && yesterdayComida.length > 0) activeCase = 'yesterday_comida'
+  else if (dayType === 'volumen') activeCase = 'training'
+
+  if (!activeCase) return null
+
+  const foodSummary = (foods: Array<{ name: string }>) => {
+    const names = foods.slice(0, 2).map(f => f.name)
+    return names.join(', ') + (foods.length > 2 ? '…' : '')
+  }
+
+  async function handleAddBreakfast() {
+    setAdding(true)
+    await onAddFoods(breakfastFoods, 'desayuno')
+    setAdding(false)
+    onDismiss()
+  }
+
+  async function handleAddYesterdayComida() {
+    setAdding(true)
+    const foods: FrequentFood[] = yesterdayComida.map(e => ({
+      name: e.name, count: 1,
+      avgKcal: e.kcal, avgProtein: e.protein, avgCarbs: e.carbs, avgFat: e.fat,
+    }))
+    await onAddFoods(foods, 'comida')
+    setAdding(false)
+    onDismiss()
+  }
+
+  const bannerStyles: Record<BannerCase, string> = {
+    missing_meal: 'border-amber-500/20 bg-amber-500/5',
+    breakfast: 'border-blue-500/20 bg-blue-500/5',
+    yesterday_comida: 'border-emerald-500/20 bg-emerald-500/5',
+    training: 'border-violet-500/20 bg-violet-500/5',
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+      className={`rounded-2xl border p-4 mb-4 relative ${bannerStyles[activeCase]}`}
+    >
+      <button onClick={onDismiss}
+        className="absolute top-3 right-3 w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition">
+        <X size={11} className="text-white/40" />
+      </button>
+
+      {activeCase === 'missing_meal' && (
+        <div>
+          <p className="text-sm font-semibold text-amber-300 pr-8">⚠️ Ayer no registraste la cena</p>
+          <p className="text-xs text-white/40 mt-0.5">¿La añades ahora?</p>
+          <button onClick={() => { onGoToYesterday('cena'); onDismiss() }}
+            className="mt-3 rounded-xl bg-amber-500/15 border border-amber-500/25 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-500/25 transition">
+            Añadir cena de ayer
+          </button>
+        </div>
+      )}
+
+      {activeCase === 'breakfast' && (
+        <div>
+          <p className="text-sm font-semibold text-blue-200 pr-8">☕ Tu desayuno habitual</p>
+          <p className="text-xs text-white/40 mt-0.5">{foodSummary(breakfastFoods)}</p>
+          <button onClick={handleAddBreakfast} disabled={adding}
+            className="mt-3 rounded-xl bg-blue-600/15 border border-blue-500/25 px-3 py-1.5 text-xs font-medium text-blue-300 hover:bg-blue-600/25 transition flex items-center gap-1.5">
+            {adding && <Loader2 size={11} className="animate-spin" />}
+            Añadir todo
+          </button>
+        </div>
+      )}
+
+      {activeCase === 'yesterday_comida' && (
+        <div>
+          <p className="text-sm font-semibold text-emerald-200 pr-8">🍽️ Ayer comiste {foodSummary(yesterdayComida)}</p>
+          <p className="text-xs text-white/40 mt-0.5">¿Lo mismo hoy?</p>
+          <div className="flex gap-2 mt-3">
+            <button onClick={handleAddYesterdayComida} disabled={adding}
+              className="rounded-xl bg-emerald-600/15 border border-emerald-500/25 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-600/25 transition flex items-center gap-1.5">
+              {adding && <Loader2 size={11} className="animate-spin" />}
+              Sí, añadir
+            </button>
+            <button onClick={onDismiss}
+              className="rounded-xl bg-white/5 border border-white/8 px-3 py-1.5 text-xs text-white/40 hover:text-white/60 transition">
+              No, buscar otro
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeCase === 'training' && (
+        <div>
+          <p className="text-sm font-semibold text-violet-200 pr-8">💪 Día de entreno</p>
+          <p className="text-xs text-white/40 mt-0.5">
+            Objetivo de hoy: <span className="text-blue-400 font-medium">{proteinTarget}g</span> de proteína
+          </p>
+          <button onClick={onDismiss}
+            className="mt-3 rounded-xl bg-violet-600/15 border border-violet-500/25 px-3 py-1.5 text-xs font-medium text-violet-300 hover:bg-violet-600/25 transition">
+            Entendido
+          </button>
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
 // ─── DAY_TYPE options ─────────────────────────────────────────────────────────
 const DAY_TYPE_OPTIONS: Array<{ value: DayType; label: string; emoji: string }> = [
   { value: 'normal',   label: 'Normal',   emoji: '⚖️' },
@@ -792,11 +958,21 @@ const DAY_TYPE_OPTIONS: Array<{ value: DayType; label: string; emoji: string }> 
 
 // ─── NutricionPage ────────────────────────────────────────────────────────────
 export function NutricionPage() {
+  // ── Date state ────────────────────────────────────────────────────────────
+  const [selectedDateKey, setSelectedDateKey] = useState(() => dateKey(new Date()))
+  const todayBool = isToday(selectedDateKey)
+  const entryDate = todayBool ? undefined : noonOf(selectedDateKey)
+
+  // ── Core state ────────────────────────────────────────────────────────────
   const [entries, setEntries]       = useState<FoodEntry[]>([])
   const [loading, setLoading]       = useState(true)
   const [favorites, setFavorites]   = useState<FoodFavorite[]>([])
   const [showAllFavs, setShowAllFavs] = useState(false)
   const [profile, setProfile]       = useState<UserProfile | null>(null)
+  const [patternData, setPatternData] = useState<PatternData | null>(null)
+  const [toast, setToast]           = useState<string | null>(null)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
+  const [addingCombo, setAddingCombo] = useState<string | null>(null)
 
   const [dayType, setDayType] = useState<DayType>(() =>
     (localStorage.getItem(getDayTypeKey()) as DayType) ?? 'normal'
@@ -815,7 +991,12 @@ export function NutricionPage() {
     () => new Set<MealType>(['desayuno', 'almuerzo', 'cena'])
   )
 
-  const todayDate = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
+  // ── Toast auto-dismiss ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 3000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   // ── Load profile + favorites ──────────────────────────────────────────────
   useEffect(() => {
@@ -823,30 +1004,35 @@ export function NutricionPage() {
     setProfile(p)
     const saved = localStorage.getItem(getDayTypeKey()) as DayType | null
     if (!saved) setDayType(autoDetectDayType(p))
-
-    // Init + load favorites sorted by relevance
     initFavorites().then(() =>
       getFavorites().then(favs => setFavorites(sortByRelevance(favs)))
     )
   }, [])
 
+  // ── Load pattern data once ────────────────────────────────────────────────
+  useEffect(() => {
+    loadPatternData().then(data => setPatternData(data)).catch(() => {})
+  }, [])
+
   const reloadFavorites = () =>
     getFavorites().then(favs => setFavorites(sortByRelevance(favs)))
 
-  // ── Entries subscription ──────────────────────────────────────────────────
+  // ── Entries subscription (re-runs on date change) ─────────────────────────
   useEffect(() => {
-    const unsub = subscribeNutritionEntries(data => { setEntries(data); setLoading(false) })
+    setLoading(true)
+    const d = parseDateKey(selectedDateKey)
+    const unsub = subscribeNutritionEntries(data => { setEntries(data); setLoading(false) }, d)
     return () => unsub()
-  }, [])
+  }, [selectedDateKey])
 
-  // ── Auto-expand meal with entries ────────────────────────────────────────
+  // ── Auto-expand meal with entries ─────────────────────────────────────────
   useEffect(() => {
     if (!entries.length) return
     const activeMeals = new Set(entries.map(e => normalizeMeal(e.meal, e.createdAt)))
     setExpandedMeals(prev => new Set([...prev, ...activeMeals]))
   }, [entries.length])
 
-  // ── Targets ──────────────────────────────────────────────────────────────
+  // ── Targets ───────────────────────────────────────────────────────────────
   const target = useMemo(() => {
     if (profile) return getTargetForDayType(profile, dayType)
     return DAY_TARGETS[dayType]
@@ -915,6 +1101,50 @@ export function NutricionPage() {
     localStorage.setItem(getDayTypeKey(), dt)
   }
 
+  // ── Date navigation ───────────────────────────────────────────────────────
+  function navigateDate(delta: number) {
+    setSelectedDateKey(prev => {
+      const d = parseDateKey(prev)
+      d.setDate(d.getDate() + delta)
+      const newKey = dateKey(d)
+      if (newKey > dateKey(new Date())) return prev
+      return newKey
+    })
+  }
+
+  function goToYesterday(meal?: MealType) {
+    const y = new Date()
+    y.setDate(y.getDate() - 1)
+    setSelectedDateKey(dateKey(y))
+    if (meal) {
+      setTimeout(() => {
+        setExpandedMeals(prev => new Set([...prev, meal]))
+      }, 300)
+    }
+  }
+
+  // ── Add foods helper (for suggestions + combos) ───────────────────────────
+  async function addFoodsToDay(foods: FrequentFood[], meal: MealType, date?: Date) {
+    await Promise.all(
+      foods.map(f =>
+        addNutritionEntry(f.name, f.avgKcal, f.avgProtein, f.avgCarbs, f.avgFat, meal, date)
+      )
+    )
+  }
+
+  async function handleSuggestionAddFoods(foods: FrequentFood[], meal: MealType) {
+    await addFoodsToDay(foods, meal)
+    setToast(`Añadido a ${getMealLabel(meal)?.label ?? meal}`)
+  }
+
+  async function handleAddCombo(combo: FoodCombo) {
+    setAddingCombo(combo.id)
+    await addFoodsToDay(combo.foods, combo.meal, entryDate)
+    setAddingCombo(null)
+    const mealLabel = getMealLabel(combo.meal)?.label ?? combo.meal
+    setToast(todayBool ? `Combo añadido a ${mealLabel}` : `Combo añadido a ${formatDateLabel(selectedDateKey)}`)
+  }
+
   const isSearching = searchQuery.trim().length > 0
 
   return (
@@ -923,8 +1153,31 @@ export function NutricionPage() {
       <PageHeader
         breadcrumb="Salud · Nutrición"
         title="Nutrición"
-        subtitle={profile ? `${todayDate} · ${getDayLabel(profile)}` : todayDate}
+        subtitle={profile ? getDayLabel(profile) : undefined}
       />
+
+      {/* Date navigator */}
+      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.02 }}
+        className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-1">
+          <button onClick={() => navigateDate(-1)}
+            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition active:scale-90">
+            <ChevronLeft size={16} className="text-white/50" />
+          </button>
+          <div className="px-3 py-1.5 rounded-xl">
+            <span className="text-sm font-semibold text-white/85">{formatDateLabel(selectedDateKey)}</span>
+          </div>
+          <button onClick={() => navigateDate(1)} disabled={todayBool}
+            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition active:scale-90 disabled:opacity-25 disabled:pointer-events-none">
+            <ChevronRight size={16} className="text-white/50" />
+          </button>
+        </div>
+        {!todayBool && (
+          <span className="rounded-lg bg-orange-500/15 border border-orange-500/25 px-2.5 py-1 text-[11px] font-medium text-orange-400">
+            Editando día pasado
+          </span>
+        )}
+      </motion.div>
 
       {/* Day type pills */}
       <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}
@@ -993,6 +1246,20 @@ export function NutricionPage() {
         </button>
       </motion.div>
 
+      {/* Suggestions banner — only for today */}
+      <AnimatePresence>
+        {todayBool && !bannerDismissed && patternData && (
+          <SuggestionsBanner
+            patternData={patternData}
+            dayType={dayType}
+            proteinTarget={target.protein}
+            onAddFoods={handleSuggestionAddFoods}
+            onGoToYesterday={goToYesterday}
+            onDismiss={() => setBannerDismissed(true)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Favorites or search results */}
       <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
         className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5 mb-4">
@@ -1004,6 +1271,40 @@ export function NutricionPage() {
             <p className="text-[10px] text-white/20">ordenado por uso reciente</p>
           )}
         </div>
+
+        {/* Detected combos row */}
+        {!isSearching && patternData && patternData.combos.length > 0 && (
+          <div className="mb-4">
+            <p className="text-[10px] uppercase tracking-widest text-white/20 mb-2">Combos habituales</p>
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {patternData.combos.slice(0, 4).map(combo => {
+                const comboKcal = combo.foods.reduce((s, f) => s + f.avgKcal, 0)
+                const isAdding = addingCombo === combo.id
+                return (
+                  <div key={combo.id}
+                    className="shrink-0 rounded-2xl border border-white/8 bg-white/3 p-3 w-40">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-sm">{combo.emoji}</span>
+                      <span className="text-[11px] font-semibold text-white/70 leading-tight truncate">{combo.name}</span>
+                    </div>
+                    <p className="text-[10px] text-white/35 mb-2 line-clamp-2 leading-tight">
+                      {combo.foods.map(f => f.name).join(' · ')}
+                    </p>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-orange-400">{Math.round(comboKcal)} kcal</span>
+                      <span className="text-[10px] text-white/25">×{combo.count}</span>
+                    </div>
+                    <button onClick={() => handleAddCombo(combo)} disabled={isAdding}
+                      className="w-full rounded-xl bg-blue-600/12 border border-blue-500/20 py-1.5 text-[11px] font-medium text-blue-300 hover:bg-blue-600/20 transition flex items-center justify-center gap-1 disabled:opacity-50">
+                      {isAdding ? <Loader2 size={11} className="animate-spin" /> : null}
+                      Añadir todo
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {isSearching ? (
           /* Search results */
@@ -1044,7 +1345,7 @@ export function NutricionPage() {
             )}
           </div>
         ) : (
-          /* Smart favorites grid — top 6 by recency+frequency */
+          /* Smart favorites grid */
           favorites.length === 0 ? (
             <div className="text-center py-8 text-sm text-white/30">Cargando favoritos…</div>
           ) : (() => {
@@ -1112,7 +1413,9 @@ export function NutricionPage() {
       <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.13 }}
         className="rounded-3xl border border-white/8 bg-[#1E1E28] p-5">
         <div className="flex items-center justify-between mb-4">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">Registro de hoy</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-white/25">
+            Registro de {formatDateLabel(selectedDateKey).toLowerCase()}
+          </p>
           {entries.length > 0 && <span className="text-xs text-white/30">{entries.length} entradas</span>}
         </div>
 
@@ -1120,7 +1423,9 @@ export function NutricionPage() {
           <div className="flex justify-center py-8"><div className="w-5 h-5 rounded-full border-2 border-white/20 border-t-blue-400 animate-spin" /></div>
         ) : entries.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-white/8 p-8 text-center text-sm text-white/30">
-            Toca un favorito o busca un alimento para registrarlo.
+            {todayBool
+              ? 'Toca un favorito o busca un alimento para registrarlo.'
+              : `Sin entradas registradas para ${formatDateLabel(selectedDateKey).toLowerCase()}.`}
           </div>
         ) : (
           <div className="space-y-2">
@@ -1193,22 +1498,51 @@ export function NutricionPage() {
         <Camera size={22} className="text-white" />
       </motion.button>
 
+      {/* Toast notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            key={toast}
+            initial={{ opacity: 0, y: 16, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 22, stiffness: 320 }}
+            className="fixed bottom-28 lg:bottom-12 left-1/2 -translate-x-1/2 z-50 rounded-2xl bg-[#2a2a38] border border-white/12 px-4 py-2.5 text-sm text-white/80 font-medium shadow-xl whitespace-nowrap"
+          >
+            {toast}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Modals */}
       <AnimatePresence>
         {confirmFood && (
           <ConfirmModal
             food={confirmFood}
             onClose={() => setConfirmFood(null)}
-            onAdded={() => setConfirmFood(null)}
+            onAdded={() => {
+              setConfirmFood(null)
+              if (!todayBool) setToast(`Añadido a ${formatDateLabel(selectedDateKey)}`)
+            }}
             favorites={favorites}
             onFavoritesChange={reloadFavorites}
+            targetDate={entryDate}
           />
         )}
         {showPhotoModal && (
-          <PhotoModal onClose={() => setShowPhotoModal(false)} onAddedMeal={getMealForTime()} />
+          <PhotoModal
+            onClose={() => setShowPhotoModal(false)}
+            onAdded={() => { if (!todayBool) setToast(`Añadido a ${formatDateLabel(selectedDateKey)}`) }}
+            onAddedMeal={getMealForTime()}
+            targetDate={entryDate}
+          />
         )}
         {showAIModal && (
-          <AIFoodModal onClose={() => setShowAIModal(false)} />
+          <AIFoodModal
+            onClose={() => setShowAIModal(false)}
+            onAdded={() => { if (!todayBool) setToast(`Añadido a ${formatDateLabel(selectedDateKey)}`) }}
+            targetDate={entryDate}
+          />
         )}
       </AnimatePresence>
     </div>
