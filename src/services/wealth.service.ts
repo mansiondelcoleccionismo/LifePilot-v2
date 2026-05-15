@@ -35,7 +35,6 @@ const USD_TO_EUR = 0.92
 
 // ── Google Sheets sync (fixed sheet) ────────────────────────────────────────
 const SHEETS_ID   = '19DCE3rGofq54kFhtbE9NsDzB8K4LxsbPVLzehGNom-o'
-const SHEETS_BASE = `https://docs.google.com/spreadsheets/d/${SHEETS_ID}/gviz/tq?tqx=out:csv`
 const SYNC_LS_KEY = 'patrimonio_last_sheets_sync'
 
 // Rows containing these strings in the Nombre column are skipped
@@ -66,87 +65,75 @@ function parseEuro(raw: string): number {
   return parseFloat(s.replace(/,/g, ''))
 }
 
-async function fetchSheetCSV(sheetParam: string): Promise<string> {
-  // Try without encoding first (some proxies prefer literal URLs)
-  const url = `${SHEETS_BASE}&${sheetParam}`
-  let res = await fetch(`https://corsproxy.io/?${url}`)
-  if (!res.ok) {
-    // Fallback: percent-encode the entire target URL
-    res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`)
-  }
-  if (!res.ok) throw new Error(`HTTP ${res.status} para ${sheetParam}`)
-  return res.text()
-}
-
 export async function syncFromSheets(): Promise<WealthAsset[]> {
-  // Try sheet=ACTIVOS first, then numeric gid fallbacks
-  const attempts = ['sheet=ACTIVOS', 'gid=0', 'gid=1', 'gid=2', 'gid=3']
+  const sheetUrl =
+    `https://docs.google.com/spreadsheets/d/${SHEETS_ID}/gviz/tq` +
+    `?tqx=out:csv&sheet=ACTIVOS`
+  const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(sheetUrl)}`
 
-  let rows: string[][] = []
-  let headerRowIdx = -1
+  console.log('[Sheets] Fetching pestaña ACTIVOS:', proxyUrl)
+  const res = await fetch(proxyUrl)
+  if (!res.ok) throw new Error(`HTTP ${res.status} al leer la pestaña ACTIVOS`)
+  const csv = await res.text()
 
-  for (const param of attempts) {
-    try {
-      const csv = await fetchSheetCSV(param)
-      const parsed = parseCSVRows(csv)
-      console.log(`[Sheets] ${param}: ${parsed.length} rows`, parsed.slice(0, 3).map(r => r.slice(0, 4)))
+  const rows = parseCSVRows(csv)
+  console.log(`[Sheets] ${rows.length} filas recibidas del CSV`)
+  rows.slice(0, 8).forEach((r, i) =>
+    console.log(`[Sheets] fila[${i}]:`, r.slice(0, 6).map(c => `"${c}"`).join(' | '))
+  )
 
-      // Header row = first row containing "nombre" or "valor"
-      const idx = parsed.findIndex(row =>
-        row.some(cell => {
-          const c = cell.toLowerCase().replace(/['"]/g, '').trim()
-          return c === 'nombre' || c.includes('valor')
-        })
-      )
-
-      if (idx >= 0) {
-        rows = parsed
-        headerRowIdx = idx
-        console.log(`[Sheets] Headers found at row ${idx} using param "${param}"`)
-        break
-      }
-    } catch (e) {
-      console.warn(`[Sheets] Attempt "${param}" failed:`, e)
-    }
-  }
+  // Header row: first column must be exactly "Nombre"
+  const headerRowIdx = rows.findIndex(
+    row => row[0]?.replace(/^"|"$/g, '').trim().toLowerCase() === 'nombre'
+  )
 
   if (headerRowIdx < 0) {
-    throw new Error('No se encontraron las cabeceras en ninguna pestaña. Verifica que la hoja "ACTIVOS" sea pública.')
+    const preview = rows.slice(0, 6).map((r, i) => `[${i}]="${r[0]}"`).join(', ')
+    throw new Error(`Cabecera "Nombre" no encontrada en col A. Primeras filas: ${preview}`)
   }
 
-  const headerRow = rows[headerRowIdx].map(h => h.toLowerCase().replace(/['"]/g, '').trim())
-  const findCol = (...names: string[]) => headerRow.findIndex(h => names.some(n => h.includes(n)))
+  const headerRow = rows[headerRowIdx].map(h => h.replace(/^"|"$/g, '').trim())
+  const headerLower = headerRow.map(h => h.toLowerCase())
+  console.log(`[Sheets] Cabeceras en fila ${headerRowIdx}:`, headerRow)
 
-  const nombreCol       = findCol('nombre', 'name', 'asset')
-  const valorCol        = findCol('valor', 'value', 'importe', 'saldo')
+  const findCol = (...names: string[]) =>
+    headerLower.findIndex(h => names.some(n => h === n.toLowerCase() || h.includes(n.toLowerCase())))
+
+  const nombreCol       = 0
+  const valorCol        = findCol('valor (€)', 'valor', 'value', 'importe', 'saldo')
   const plataformaCol   = findCol('plataforma', 'platform', 'broker')
-  const tipoProductoCol = findCol('tipo producto', 'tipoproducto', 'producto', 'product')
+  const tipoProductoCol = findCol('tipo producto', 'tipoproducto', 'producto')
   const tipoActivoCol   = findCol('tipo activo', 'tipoactivo')
 
-  if (nombreCol < 0 || valorCol < 0) {
-    throw new Error(`Columnas no encontradas. Cabeceras detectadas: ${rows[headerRowIdx].join(' | ')}`)
+  console.log('[Sheets] Columnas detectadas:', {
+    nombre: nombreCol, valor: valorCol, plataforma: plataformaCol,
+    tipoProducto: tipoProductoCol, tipoActivo: tipoActivoCol,
+  })
+
+  if (valorCol < 0) {
+    throw new Error(`Columna "Valor (€)" no encontrada. Cabeceras: ${headerRow.join(' | ')}`)
   }
 
-  // Filter valid data rows (skip title, totals, distribution rows)
+  // Data rows: from header+1, stop reading when Nombre is empty
   const dataRows = rows.slice(headerRowIdx + 1).filter(row => {
     const nombre = row[nombreCol]?.replace(/^"|"$/g, '').trim()
     if (!nombre) return false
-    const nl = nombre.toLowerCase()
-    if (SKIP_NOMBRE.some(s => nl.includes(s))) return false
+    if (nombre.toUpperCase().includes('TOTAL')) return false
+    if (SKIP_NOMBRE.some(s => nombre.toLowerCase().includes(s))) return false
     const valor = parseEuro(row[valorCol] ?? '')
     return !isNaN(valor) && valor > 0
   })
 
-  console.log(
-    `[Sheets] ${dataRows.length} assets to sync:`,
-    dataRows.slice(0, 5).map(r => ({
-      nombre: r[nombreCol]?.replace(/^"|"$/g, '').trim(),
-      valor:  r[valorCol]?.replace(/^"|"$/g, '').trim(),
-    })),
-  )
+  console.log(`[Sheets] ${dataRows.length} activos válidos:`)
+  dataRows.forEach((r, i) => {
+    const nombre    = r[nombreCol]?.replace(/^"|"$/g, '').trim()
+    const valorRaw  = r[valorCol]?.replace(/^"|"$/g, '').trim()
+    const valorNum  = parseEuro(r[valorCol] ?? '')
+    console.log(`  [${i}] "${nombre}" → raw="${valorRaw}" → ${valorNum} €`)
+  })
 
   if (dataRows.length === 0) {
-    throw new Error('No se encontraron activos válidos en la hoja ACTIVOS')
+    throw new Error('No se encontraron activos válidos en la pestaña ACTIVOS (filas 3-12)')
   }
 
   const VALID_TIPO_PRODUCTO: TipoProducto[] = [
@@ -162,25 +149,25 @@ export async function syncFromSheets(): Promise<WealthAsset[]> {
   // Insert new assets sequentially to preserve order
   const newAssets: WealthAsset[] = []
   for (const row of dataRows) {
-    const nombre   = row[nombreCol].replace(/^"|"$/g, '').trim()
-    const valor    = parseEuro(row[valorCol] ?? '')
-    const plataforma  = plataformaCol   >= 0 ? (row[plataformaCol]?.replace(/^"|"$/g, '').trim() ?? '')  : ''
-    const rawTP       = tipoProductoCol >= 0 ?  row[tipoProductoCol]?.replace(/^"|"$/g, '').trim() ?? '' : ''
-    const rawTA       = tipoActivoCol   >= 0 ?  row[tipoActivoCol]?.replace(/^"|"$/g, '').trim()   ?? '' : ''
+    const nombre     = row[nombreCol].replace(/^"|"$/g, '').trim()
+    const valor      = parseEuro(row[valorCol] ?? '')
+    const plataforma = plataformaCol   >= 0 ? (row[plataformaCol]?.replace(/^"|"$/g, '').trim() ?? '')  : ''
+    const rawTP      = tipoProductoCol >= 0 ?  row[tipoProductoCol]?.replace(/^"|"$/g, '').trim() ?? '' : ''
+    const rawTA      = tipoActivoCol   >= 0 ?  row[tipoActivoCol]?.replace(/^"|"$/g, '').trim()   ?? '' : ''
 
     const tipoActivo: TipoActivo = VALID_TIPO_ACTIVO.includes(rawTA as TipoActivo)
       ? (rawTA as TipoActivo)
       : rawTA.includes('Fija')     ? 'Renta Fija'
       : rawTA.includes('Variable') ? 'Renta Variable'
-      : rawTA.toLowerCase().includes('cripto') ? 'Cripto'
-      : rawTA.toLowerCase().includes('liquid') ? 'Liquidez'
+      : rawTA.toLowerCase().includes('cripto')  ? 'Cripto'
+      : rawTA.toLowerCase().includes('liquid')  ? 'Liquidez'
       : 'Renta Variable'
 
     const tipoProducto: TipoProducto = VALID_TIPO_PRODUCTO.includes(rawTP as TipoProducto)
       ? (rawTP as TipoProducto)
-      : tipoActivo === 'Liquidez'    ? 'Liquidez'
-      : tipoActivo === 'Renta Fija'  ? 'Renta Fija'
-      : tipoActivo === 'Cripto'      ? 'Cripto'
+      : tipoActivo === 'Liquidez'   ? 'Liquidez'
+      : tipoActivo === 'Renta Fija' ? 'Renta Fija'
+      : tipoActivo === 'Cripto'     ? 'Cripto'
       : 'Renta Variable'
 
     const ref = await addDoc(collection(db, WEALTH_ASSETS_COL), {
