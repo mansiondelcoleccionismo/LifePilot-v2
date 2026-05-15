@@ -127,12 +127,20 @@ async function resizeAndEncode(file: File): Promise<{ data: string; mimeType: st
 interface PhotoFood { nombre: string; gramos: number; kcal: number; protein: number; carbs: number; fat: number }
 interface PhotoResult { descripcion: string; alimentos: PhotoFood[]; totales: { kcal: number; protein: number; carbs: number; fat: number } }
 
+function cleanJSON(text: string): string {
+  return text
+    .replace(/```json\n?/g, '')
+    .replace(/```\n?/g, '')
+    .trim()
+}
+
 async function analyzePhoto(file: File): Promise<PhotoResult> {
   const { data, mimeType } = await resizeAndEncode(file)
   const prompt = `Analiza esta foto de comida. Identifica todos los alimentos visibles y estima las cantidades en gramos. Devuelve SOLO un JSON válido con este formato exacto, sin texto adicional:
 {"descripcion":"descripción breve del plato","alimentos":[{"nombre":"nombre del alimento","gramos":0,"kcal":0,"protein":0,"carbs":0,"fat":0}],"totales":{"kcal":0,"protein":0,"carbs":0,"fat":0}}`
   const text = await callAI(prompt, { data, mimeType })
-  const match = text.match(/\{[\s\S]*\}/)
+  const cleaned = cleanJSON(text)
+  const match = cleaned.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('NO_FOOD')
   try { return JSON.parse(match[0]) as PhotoResult }
   catch { throw new Error('PARSE_ERROR') }
@@ -191,10 +199,7 @@ Responde ÚNICAMENTE con JSON sin texto adicional:
 
       const responseText = await callAI(prompt, undefined, true)
 
-      let cleaned = responseText
-        .replace(/```json\s*/gi, '')
-        .replace(/```\s*/g, '')
-        .trim()
+      let cleaned = cleanJSON(responseText)
       const first = cleaned.indexOf('{')
       const last  = cleaned.lastIndexOf('}')
       if (first === -1 || last === -1)

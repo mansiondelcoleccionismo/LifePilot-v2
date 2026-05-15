@@ -12,11 +12,13 @@ export interface OpenFoodResult {
 }
 
 export async function searchFoods(query: string): Promise<OpenFoodResult[]> {
-  const url =
+  const offUrl =
     `https://world.openfoodfacts.org/cgi/search.pl` +
     `?search_terms=${encodeURIComponent(query)}` +
     `&search_simple=1&action=process&json=1&page_size=20` +
     `&fields=id,_id,code,product_name,product_name_es,brands,nutriments,image_front_small_url`
+
+  const url = `https://corsproxy.io/?${encodeURIComponent(offUrl)}`
 
   try {
     const res = await fetch(url)
