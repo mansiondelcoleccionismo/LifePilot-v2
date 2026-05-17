@@ -18,32 +18,24 @@
 .light {
   color-scheme: light;
 
-  /* Fondos warm — no blanco puro que cansa */
+  /* ── Variables semánticas ─────────────────────────────────────────────────── */
   --color-bg-base:      #F5F4F0;
   --color-bg-subtle:    #ECEAE6;
   --color-bg-muted:     #E3E1DC;
   --color-bg-card:      #FFFFFF;
   --color-bg-raised:    #FFFFFF;
   --color-bg-overlay:   #FFFFFF;
-
-  /* Texto — NUNCA negro puro */
   --color-text-primary:   #1C1C1E;
   --color-text-secondary: #48484A;
   --color-text-muted:     #6C6C70;
   --color-text-disabled:  #AEAEB2;
-
-  /* Bordes visibles */
   --color-border-subtle:  rgba(0,0,0,0.06);
   --color-border-default: rgba(0,0,0,0.12);
   --color-border-strong:  rgba(0,0,0,0.20);
-
-  /* Acento azul oscuro — legible sobre blanco */
   --color-accent:         #1D4ED8;
   --color-accent-hover:   #1E40AF;
   --color-accent-subtle:  rgba(29,78,216,0.08);
   --color-accent-text:    #1D4ED8;
-
-  /* Estados adaptados al claro */
   --color-success:        #059669;
   --color-success-subtle: rgba(5,150,105,0.08);
   --color-warning:        #D97706;
@@ -51,116 +43,123 @@
   --color-danger:         #DC2626;
   --color-danger-subtle:  rgba(220,38,38,0.08);
 
-  /* Variables de layout (usadas por los componentes) */
-  --bg-base:      #F5F4F0;
-  --bg-card:      #FFFFFF;
-  --bg-popup:     #FFFFFF;
-  --bg-topbar:    rgba(245, 244, 240, 0.85);
-  --bg-mobilenav: rgba(236, 234, 230, 0.95);
-  --hover-bg:     rgba(0, 0, 0, 0.05);
-  --active-bg:    rgba(29, 78, 216, 0.08);
+  /* ── Variables de layout (usadas por los componentes) ─────────────────────── */
+  --bg-base:        #F5F4F0;
+  --bg-card:        #FFFFFF;
+  --bg-popup:       #FFFFFF;
+  --bg-topbar:      rgba(245, 244, 240, 0.90);
+  --bg-mobilenav:   rgba(236, 234, 230, 0.95);
+  --hover-bg:       rgba(0, 0, 0, 0.05);
+  --active-bg:      rgba(29, 78, 216, 0.08);
   --text-primary:   #1C1C1E;
   --text-secondary: #48484A;
   --text-muted:     #6C6C70;
-  --border:       rgba(0, 0, 0, 0.08);
-}
+  --border:         rgba(0, 0, 0, 0.08);
 
-/* ── Reglas específicas del modo claro ─────────────────────────────────────── */
-
-.light body {
   background-color: #F5F4F0;
   color: #1C1C1E;
-}
 
-/* Sidebar en claro */
-.light aside {
-  background-color: #ECEAE6 !important;
-  border-right-color: rgba(0,0,0,0.08) !important;
-}
+  /* ── Texto: blancos transparentes → grises legibles ─────────────────────── */
+  [class*="text-white/90"],
+  [class*="text-white/80"] { color: #1C1C1E !important; }
 
-/* Topbar en claro */
-.light header {
-  background-color: rgba(245,244,240,0.85) !important;
-  border-bottom-color: rgba(0,0,0,0.08) !important;
-}
+  [class*="text-white/70"],
+  [class*="text-white/60"],
+  [class*="text-white/55"],
+  [class*="text-white/50"] { color: #3A3A3C !important; }
 
-/* Cards en claro */
-.light .bg-\[\#1E1E28\] {
-  background-color: #FFFFFF !important;
-  border-color: rgba(0,0,0,0.08) !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
-}
+  [class*="text-white/40"],
+  [class*="text-white/35"],
+  [class*="text-white/30"] { color: #6C6C70 !important; }
 
-/* Fondo base en claro */
-.light .bg-\[\#09090E\],
-.light .bg-\[\#111118\],
-.light .bg-\[\#18181F\] {
-  background-color: #F5F4F0 !important;
-}
+  [class*="text-white/25"],
+  [class*="text-white/20"],
+  [class*="text-white/18"] { color: #8E8E93 !important; }
 
-/* Texto en claro */
-.light .text-white\/90,
-.light .text-white\/80 {
-  color: #1C1C1E !important;
-}
-.light .text-white\/60,
-.light .text-white\/55,
-.light .text-white\/50 {
-  color: #48484A !important;
-}
-.light .text-white\/40,
-.light .text-white\/35,
-.light .text-white\/30,
-.light .text-white\/25 {
-  color: #6C6C70 !important;
-}
+  /* ── Fondos oscuros hardcodeados → claros ────────────────────────────────── */
+  [class*="bg-[#09090E]"],
+  [class*="bg-[#0A0A0F]"] { background-color: #F5F4F0 !important; }
 
-/* Inputs en claro */
-.light input,
-.light textarea,
-.light select {
-  background-color: #FFFFFF !important;
-  border-color: rgba(0,0,0,0.15) !important;
-  color: #1C1C1E !important;
-}
-.light input::placeholder,
-.light textarea::placeholder {
-  color: #AEAEB2 !important;
-}
+  [class*="bg-[#111118]"],
+  [class*="bg-[#18181F]"] { background-color: #ECEAE6 !important; }
 
-/* Nav items hover en claro */
-.light .hover\:bg-white\/\[0\.06\]:hover {
-  background-color: rgba(0,0,0,0.05) !important;
-}
-.light .bg-white\/\[0\.08\] {
-  background-color: rgba(29,78,216,0.08) !important;
-}
+  [class*="bg-[#1E1E28]"],
+  [class*="bg-[#252530]"],
+  [class*="bg-[#2C2C3A]"],
+  [class*="bg-[#1a1a24]"],
+  [class*="bg-[#16161f]"] {
+    background-color: #FFFFFF !important;
+    border-color: rgba(0,0,0,0.08) !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+  }
 
-/* Mobile nav en claro */
-.light nav.fixed.bottom-0 {
-  background-color: rgba(236,234,230,0.95) !important;
-  border-top-color: rgba(0,0,0,0.08) !important;
-}
+  /* ── Fondos con opacidad blanca → gris muy sutil ─────────────────────────── */
+  [class*="bg-white/3"],
+  [class*="bg-white/4"],
+  [class*="bg-white/5"],
+  [class*="bg-white/6"],
+  [class*="bg-white/7"],
+  [class*="bg-white/8"],
+  [class*="bg-white/10"] { background-color: rgba(0,0,0,0.04) !important; }
 
-/* Bordes en claro */
-.light .border-white\/\[0\.08\] {
-  border-color: rgba(0,0,0,0.08) !important;
-}
+  /* ── Bordes con opacidad blanca → gris visible ───────────────────────────── */
+  [class*="border-white/4"],
+  [class*="border-white/5"],
+  [class*="border-white/6"],
+  [class*="border-white/8"],
+  [class*="border-white/10"],
+  [class*="border-white/12"],
+  [class*="border-white/13"],
+  [class*="border-white/15"],
+  [class*="border-white/18"] { border-color: rgba(0,0,0,0.10) !important; }
 
-/* Active bar sidebar en claro */
-.light .bg-blue-500 {
-  background-color: #1D4ED8 !important;
-}
+  /* ── Sidebar ─────────────────────────────────────────────────────────────── */
+  aside {
+    background-color: #ECEAE6 !important;
+    border-right-color: rgba(0,0,0,0.08) !important;
+  }
 
-/* Search pill en Topbar */
-.light .bg-white\/\[0\.05\] {
-  background-color: rgba(0,0,0,0.05) !important;
-  border-color: rgba(0,0,0,0.10) !important;
-}
+  /* ── Topbar ──────────────────────────────────────────────────────────────── */
+  header.fixed {
+    background-color: rgba(245,244,240,0.90) !important;
+    border-bottom-color: rgba(0,0,0,0.08) !important;
+  }
 
-/* Scrollbar en claro */
-.light ::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.15);
+  /* ── Mobile nav ──────────────────────────────────────────────────────────── */
+  nav.fixed.bottom-0 {
+    background-color: rgba(236,234,230,0.95) !important;
+    border-top-color: rgba(0,0,0,0.08) !important;
+  }
+
+  /* ── Inputs / Selects ────────────────────────────────────────────────────── */
+  input, textarea, select {
+    background-color: #FFFFFF !important;
+    border-color: rgba(0,0,0,0.15) !important;
+    color: #1C1C1E !important;
+  }
+  input::placeholder, textarea::placeholder { color: #AEAEB2 !important; }
+  option { background-color: #FFFFFF; color: #1C1C1E; }
+
+  /* ── Labels uppercase → gris legible ─────────────────────────────────────── */
+  [class*="uppercase"][class*="tracking-wide"],
+  [class*="uppercase"][class*="tracking-wider"],
+  [class*="uppercase"][class*="tracking-widest"] { color: #6C6C70 !important; }
+
+  /* ── Acento azul legible en claro ────────────────────────────────────────── */
+  [class*="text-blue-400"] { color: #1D4ED8 !important; }
+  [class*="text-blue-300"] { color: #2563EB !important; }
+
+  /* ── Gradientes oscuros → claros ─────────────────────────────────────────── */
+  [class*="from-blue-950"],
+  [class*="from-violet-950"] { --tw-gradient-from: #EEF2FF !important; }
+
+  /* ── Hover states ────────────────────────────────────────────────────────── */
+  [class*="hover:bg-white/5"]:hover,
+  [class*="hover:bg-white/6"]:hover,
+  [class*="hover:bg-white/8"]:hover { background-color: rgba(0,0,0,0.05) !important; }
+
+  /* ── Scrollbar ───────────────────────────────────────────────────────────── */
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
 }
 
 html {
