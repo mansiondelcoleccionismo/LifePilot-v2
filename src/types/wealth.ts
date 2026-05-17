@@ -79,6 +79,8 @@ export interface WealthAnalysis {
   puntos_fuertes: string[]
   areas_mejora: string[]
   recomendacion_principal?: string
+  riesgos_texto?: string[]
+  proyeccion_texto?: string
   riesgos?: RiesgoItem[]
   recomendaciones?: RecomendacionItem[]
   proyeccion?: { a_5_anos: string; a_10_anos: string; supuesto: string }

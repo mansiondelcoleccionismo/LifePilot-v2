@@ -194,17 +194,45 @@ function LineChart({ snapshots }: LineChartProps) {
   )
 }
 
+function parseFinancialAnalysis(text: string) {
+  const clean = text
+    .replace(/```json\n?/gi, '')
+    .replace(/```\n?/g, '')
+    .trim()
+
+  const getSection = (label: string) => {
+    const regex = new RegExp(label + ':?\\s*([\\s\\S]*?)(?=\\n[A-ZÁÉÍÓÚ]{3,}:|$)', 'i')
+    const match = clean.match(regex)
+    return match ? match[1].trim() : null
+  }
+
+  return {
+    puntuacion:    parseInt(getSection('PUNTUACIÓN') || getSection('PUNTUACION') || '7') || 7,
+    resumen:       getSection('RESUMEN'),
+    puntosFuertes: (getSection('PUNTOS FUERTES') || '')
+      .split('\n').filter(l => l.trim().startsWith('-'))
+      .map(l => l.replace(/^-\s*/, '').trim()).filter(Boolean),
+    areasMejora:   (getSection('ÁREAS DE MEJORA') || getSection('AREAS DE MEJORA') || '')
+      .split('\n').filter(l => l.trim().startsWith('-'))
+      .map(l => l.replace(/^-\s*/, '').trim()).filter(Boolean),
+    riesgos:       (getSection('RIESGOS') || '')
+      .split('\n').filter(l => l.trim().startsWith('-'))
+      .map(l => l.replace(/^-\s*/, '').trim()).filter(Boolean),
+    recomendacion: getSection('RECOMENDACIÓN PRINCIPAL') || getSection('RECOMENDACION PRINCIPAL'),
+    proyeccion:    getSection('PROYECCIÓN') || getSection('PROYECCION'),
+  }
+}
+
 function AnalysisDisplay({ analysis, onForce, loading }: {
   analysis: WealthAnalysis
   onForce: () => void
   loading: boolean
 }) {
-  const { puntuacion: score, resumen, puntos_fuertes, areas_mejora, recomendacion_principal } = analysis
-  const isRawFallback = score === 0 && puntos_fuertes.length === 0
-
-  const scoreColor = score >= 8 ? 'text-emerald-400' : score >= 6 ? 'text-blue-400' : 'text-amber-400'
-  const scoreBg    = score >= 8 ? 'bg-emerald-500/10 border-emerald-500/25' : score >= 6 ? 'bg-blue-500/10 border-blue-500/25' : 'bg-amber-500/10 border-amber-500/25'
-  const scoreLabel = score >= 8 ? 'Excelente gestión' : score >= 6 ? 'Buena base' : score >= 4 ? 'Necesita ajustes' : 'Requiere atención'
+  const score     = analysis.puntuacion
+  const scoreColor = score >= 8 ? 'text-emerald-400' : score >= 6 ? 'text-blue-400' : score >= 4 ? 'text-amber-400' : 'text-red-400'
+  const scoreBg    = score >= 8 ? 'bg-emerald-500/10 border-emerald-500/25' : score >= 6 ? 'bg-blue-500/10 border-blue-500/25' : score >= 4 ? 'bg-amber-500/10 border-amber-500/25' : 'bg-red-500/10 border-red-500/25'
+  const scoreLabel = score >= 8 ? 'Excelente gestión' : score >= 6 ? 'Buena base' : score >= 4 ? 'Necesita ajustes' : 'Atención urgente'
+  const riesgos    = analysis.riesgos_texto ?? []
 
   return (
     <div className="space-y-4">
@@ -223,7 +251,7 @@ function AnalysisDisplay({ analysis, onForce, loading }: {
       </div>
 
       {/* Score card */}
-      {!isRawFallback && (
+      {score > 0 && (
         <div className={`rounded-2xl border ${scoreBg} p-4 flex items-center gap-4`}>
           <p className={`text-5xl font-bold tabular-nums ${scoreColor}`}>
             {score}<span className="text-xl text-white/30">/10</span>
@@ -236,34 +264,32 @@ function AnalysisDisplay({ analysis, onForce, loading }: {
       )}
 
       {/* Resumen */}
-      <div className="rounded-2xl bg-amber-500/8 border border-amber-500/20 p-4">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-500/60 mb-2">Resumen</p>
-        <p className="text-sm text-white/80 leading-relaxed">{resumen}</p>
-      </div>
+      {analysis.resumen && (
+        <div className="rounded-2xl bg-amber-500/8 border border-amber-500/20 p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-500/60 mb-2">Resumen</p>
+          <p className="text-sm text-white/80 leading-relaxed">{analysis.resumen}</p>
+        </div>
+      )}
 
-      {/* Puntos fuertes + Áreas mejora */}
-      {(puntos_fuertes.length > 0 || areas_mejora.length > 0) && (
+      {/* Puntos fuertes + Áreas de mejora */}
+      {(analysis.puntos_fuertes.length > 0 || analysis.areas_mejora.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {puntos_fuertes.length > 0 && (
+          {analysis.puntos_fuertes.length > 0 && (
             <div className="rounded-2xl bg-emerald-500/5 border border-emerald-500/15 p-4">
               <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-3">Puntos fuertes</p>
               <ul className="space-y-2">
-                {puntos_fuertes.map((p, i) => (
-                  <li key={i} className="text-sm text-white/70 flex gap-2">
-                    <span className="shrink-0">✅</span>{p}
-                  </li>
+                {analysis.puntos_fuertes.map((p, i) => (
+                  <li key={i} className="text-sm text-white/70 flex gap-2"><span className="shrink-0">✅</span>{p}</li>
                 ))}
               </ul>
             </div>
           )}
-          {areas_mejora.length > 0 && (
+          {analysis.areas_mejora.length > 0 && (
             <div className="rounded-2xl bg-amber-500/5 border border-amber-500/15 p-4">
               <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-3">Áreas de mejora</p>
               <ul className="space-y-2">
-                {areas_mejora.map((a, i) => (
-                  <li key={i} className="text-sm text-white/70 flex gap-2">
-                    <span className="shrink-0">⚠️</span>{a}
-                  </li>
+                {analysis.areas_mejora.map((a, i) => (
+                  <li key={i} className="text-sm text-white/70 flex gap-2"><span className="shrink-0">⚠️</span>{a}</li>
                 ))}
               </ul>
             </div>
@@ -271,11 +297,33 @@ function AnalysisDisplay({ analysis, onForce, loading }: {
         </div>
       )}
 
+      {/* Riesgos */}
+      {riesgos.length > 0 && (
+        <div className="rounded-2xl bg-red-500/5 border border-red-500/15 p-4">
+          <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-3">Riesgos</p>
+          <ul className="space-y-2">
+            {riesgos.map((r, i) => (
+              <li key={i} className="text-sm text-white/70 flex gap-2">
+                <span className="shrink-0">{i === 0 ? '🔴' : '🟡'}</span>{r}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Recomendación principal */}
-      {recomendacion_principal && (
+      {analysis.recomendacion_principal && (
         <div className="rounded-2xl bg-blue-500/10 border border-blue-500/25 p-4">
-          <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">💡 Recomendación principal</p>
-          <p className="text-sm text-white/80">{recomendacion_principal}</p>
+          <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">⚡ Recomendación principal</p>
+          <p className="text-sm text-white/80">{analysis.recomendacion_principal}</p>
+        </div>
+      )}
+
+      {/* Proyección */}
+      {analysis.proyeccion_texto && (
+        <div className="rounded-2xl bg-white/3 border border-white/8 p-4">
+          <p className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-2">📈 Proyección estimada</p>
+          <p className="text-sm text-white/70">{analysis.proyeccion_texto}</p>
         </div>
       )}
 
@@ -430,54 +478,61 @@ export function PatrimonioPage() {
         }
       }
 
-      const t = calcTotal(assets)
+      const t  = calcTotal(assets)
       const bd = calcBreakdown(assets)
       const assetsStr = assets
-        .map(a => `${a.nombre} (${a.plataforma}): ${fmtEur(a.valor, 0)} — ${((a.valor / t) * 100).toFixed(0)}%`)
+        .map(a => `- ${a.nombre} (${a.plataforma}): ${fmtEur(a.valor, 0)} [${a.tipoActivo}]`)
         .join('\n')
 
-      const prompt = `Eres asesor financiero independiente. Analiza este patrimonio de Daniel (35 años, España, objetivo independencia financiera):
+      const prompt = `Eres un asesor financiero independiente experto.
+Analiza el patrimonio de Daniel (35 años, España, objetivo: independencia financiera a largo plazo).
 
+PATRIMONIO:
 ${assetsStr}
 Total: ${fmtEur(t, 0)}
-Liquidez ${((bd.liquidez/t)*100).toFixed(0)}% · RentaFija ${((bd.rentaFija/t)*100).toFixed(0)}% · RentaVariable ${((bd.rentaVariable/t)*100).toFixed(0)}% · Cripto ${((bd.cripto/t)*100).toFixed(0)}%
+Distribución: Liquidez ${((bd.liquidez/t)*100).toFixed(0)}% · Renta Fija ${((bd.rentaFija/t)*100).toFixed(0)}% · Renta Variable ${((bd.rentaVariable/t)*100).toFixed(0)}% · Cripto ${((bd.cripto/t)*100).toFixed(0)}%
 
-Responde SOLO con este JSON sin backticks ni texto adicional:
-{"puntuacion":8,"resumen":"2 frases evaluando la situación.","puntos_fuertes":["punto1","punto2"],"areas_mejora":["mejora1","mejora2"],"recomendacion_principal":"1 acción concreta ahora."}`
+Escribe un análisis en texto plano con estas secciones separadas por líneas en blanco. Cada sección empieza con el título en mayúsculas seguido de dos puntos:
 
-      const cleanJSON = (s: string) =>
-        s.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim()
+PUNTUACIÓN: [número del 1 al 10]
 
-      const raw     = await callAI(prompt, undefined, true, 800)
-      const cleaned = cleanJSON(raw)
-      const match   = cleaned.match(/\{[\s\S]*\}/)
+RESUMEN: [2-3 frases sobre la situación general]
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let parsed: any = null
-      if (match) {
-        try { parsed = JSON.parse(match[0]) } catch { /* fall through to text fallback */ }
+PUNTOS FUERTES:
+- [punto 1]
+- [punto 2]
+- [punto 3]
+
+ÁREAS DE MEJORA:
+- [área 1 con recomendación concreta]
+- [área 2]
+
+RIESGOS:
+- [riesgo 1]
+- [riesgo 2]
+
+RECOMENDACIÓN PRINCIPAL: [una acción concreta a tomar ahora]
+
+PROYECCIÓN: [estimación del patrimonio en 5 y 10 años]
+
+Escribe frases COMPLETAS. Máximo 400 palabras en total.`
+
+      const raw    = await callAI(prompt, undefined, true, 1200)
+      const clean  = raw.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim()
+      const parsed = parseFinancialAnalysis(clean)
+
+      const result: WealthAnalysis = {
+        id:                      'latest',
+        puntuacion:              parsed.puntuacion,
+        resumen:                 parsed.resumen ?? clean,
+        puntos_fuertes:          parsed.puntosFuertes,
+        areas_mejora:            parsed.areasMejora,
+        recomendacion_principal: parsed.recomendacion ?? undefined,
+        riesgos_texto:           parsed.riesgos.length > 0 ? parsed.riesgos : undefined,
+        proyeccion_texto:        parsed.proyeccion ?? undefined,
+        generatedAt: new Date(),
+        totalEUR:    t,
       }
-
-      const result: WealthAnalysis = parsed
-        ? {
-            id: 'latest',
-            puntuacion:             Number(parsed.puntuacion) || 0,
-            resumen:                String(parsed.resumen ?? ''),
-            puntos_fuertes:         Array.isArray(parsed.puntos_fuertes)  ? parsed.puntos_fuertes  : [],
-            areas_mejora:           Array.isArray(parsed.areas_mejora)    ? parsed.areas_mejora    : [],
-            recomendacion_principal: String(parsed.recomendacion_principal ?? ''),
-            generatedAt: new Date(),
-            totalEUR:    t,
-          }
-        : {
-            id: 'latest',
-            puntuacion:     0,
-            resumen:        cleaned || 'Sin respuesta de la IA',
-            puntos_fuertes: [],
-            areas_mejora:   [],
-            generatedAt: new Date(),
-            totalEUR:    t,
-          }
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id: _id, generatedAt: _gen, ...saveData } = result
