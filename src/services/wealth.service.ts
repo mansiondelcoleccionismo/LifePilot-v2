@@ -35,8 +35,9 @@ const ANALYSIS_COL      = 'wealth_analysis'
 const USD_TO_EUR = 0.92
 
 // ── Google Sheets sync (fixed sheet) ────────────────────────────────────────
-const SHEETS_ID   = '19DCE3rGofq54kFhtbE9NsDzB8K4LxsbPVLzehGNom-o'
-const SYNC_LS_KEY = 'patrimonio_last_sheets_sync'
+const SHEETS_ID    = '19DCE3rGofq54kFhtbE9NsDzB8K4LxsbPVLzehGNom-o'
+const ACTIVOS_GID  = '1299087405'  // pestaña "💰ACTIVOS"
+const SYNC_LS_KEY  = 'patrimonio_last_sheets_sync'
 
 // Rows containing these strings in the Nombre column are skipped
 const SKIP_NOMBRE = ['total patrimonio', 'distribución', 'distribucion', 'tipo activo', 'nombre', 'activos financieros']
@@ -69,7 +70,7 @@ function parseEuro(raw: string): number {
 export async function syncFromSheets(): Promise<WealthAsset[]> {
   const sheetUrl =
     `https://docs.google.com/spreadsheets/d/${SHEETS_ID}/export` +
-    `?format=csv&sheet=ACTIVOS`
+    `?format=csv&gid=${ACTIVOS_GID}`
   console.log('[Sheets] Fetching pestaña ACTIVOS:', sheetUrl)
   const res = await fetchWithCorsProxy(sheetUrl)
   if (!res.ok) throw new Error(`HTTP ${res.status} al leer la pestaña ACTIVOS`)
