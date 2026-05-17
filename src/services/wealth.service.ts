@@ -12,6 +12,7 @@ import {
   setDoc,
   getDocs,
   getDoc,
+  writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type {
@@ -143,12 +144,16 @@ export async function syncFromSheets(): Promise<WealthAsset[]> {
   ]
   const VALID_TIPO_ACTIVO: TipoActivo[] = ['Liquidez', 'Renta Fija', 'Renta Variable', 'Cripto']
 
-  // Delete all existing assets
-  const existing = await getDocs(collection(db, WEALTH_ASSETS_COL))
-  await Promise.all(existing.docs.map(d => deleteDoc(doc(db, WEALTH_ASSETS_COL, d.id))))
-
-  // Insert new assets sequentially to preserve order
+  // Build the new asset data first (before touching Firebase)
   const newAssets: WealthAsset[] = []
+  const batch = writeBatch(db)
+
+  // Stage: delete all existing documents
+  const existing = await getDocs(collection(db, WEALTH_ASSETS_COL))
+  existing.docs.forEach(d => batch.delete(d.ref))
+  console.log(`[Sheets] Borrando ${existing.size} activos existentes`)
+
+  // Stage: add all new documents
   for (const row of dataRows) {
     const nombre     = row[nombreCol].replace(/^"|"$/g, '').trim()
     const valor      = parseEuro(row[valorCol] ?? '')
@@ -171,11 +176,14 @@ export async function syncFromSheets(): Promise<WealthAsset[]> {
       : tipoActivo === 'Cripto'     ? 'Cripto'
       : 'Renta Variable'
 
-    const ref = await addDoc(collection(db, WEALTH_ASSETS_COL), {
-      nombre, plataforma, tipoProducto, tipoActivo, valor, updatedAt: serverTimestamp(),
-    })
-    newAssets.push({ id: ref.id, nombre, plataforma, tipoProducto, tipoActivo, valor, updatedAt: new Date() })
+    const newRef = doc(collection(db, WEALTH_ASSETS_COL))
+    batch.set(newRef, { nombre, plataforma, tipoProducto, tipoActivo, valor, updatedAt: serverTimestamp() })
+    newAssets.push({ id: newRef.id, nombre, plataforma, tipoProducto, tipoActivo, valor, updatedAt: new Date() })
   }
+
+  // Commit atomically: deletes + adds happen together or not at all
+  await batch.commit()
+  console.log(`[Sheets] Commit OK: ${newAssets.length} activos guardados`)
 
   if (newAssets.length > 0) await savePatrimonioSnapshot(newAssets)
   localStorage.setItem(SYNC_LS_KEY, new Date().toISOString())
