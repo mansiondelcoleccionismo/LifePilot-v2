@@ -16,17 +16,151 @@
 }
 
 .light {
-  --bg-base:      #F4F3EF;
+  color-scheme: light;
+
+  /* Fondos warm — no blanco puro que cansa */
+  --color-bg-base:      #F5F4F0;
+  --color-bg-subtle:    #ECEAE6;
+  --color-bg-muted:     #E3E1DC;
+  --color-bg-card:      #FFFFFF;
+  --color-bg-raised:    #FFFFFF;
+  --color-bg-overlay:   #FFFFFF;
+
+  /* Texto — NUNCA negro puro */
+  --color-text-primary:   #1C1C1E;
+  --color-text-secondary: #48484A;
+  --color-text-muted:     #6C6C70;
+  --color-text-disabled:  #AEAEB2;
+
+  /* Bordes visibles */
+  --color-border-subtle:  rgba(0,0,0,0.06);
+  --color-border-default: rgba(0,0,0,0.12);
+  --color-border-strong:  rgba(0,0,0,0.20);
+
+  /* Acento azul oscuro — legible sobre blanco */
+  --color-accent:         #1D4ED8;
+  --color-accent-hover:   #1E40AF;
+  --color-accent-subtle:  rgba(29,78,216,0.08);
+  --color-accent-text:    #1D4ED8;
+
+  /* Estados adaptados al claro */
+  --color-success:        #059669;
+  --color-success-subtle: rgba(5,150,105,0.08);
+  --color-warning:        #D97706;
+  --color-warning-subtle: rgba(217,119,6,0.08);
+  --color-danger:         #DC2626;
+  --color-danger-subtle:  rgba(220,38,38,0.08);
+
+  /* Variables de layout (usadas por los componentes) */
+  --bg-base:      #F5F4F0;
   --bg-card:      #FFFFFF;
   --bg-popup:     #FFFFFF;
-  --bg-topbar:    rgba(244, 243, 239, 0.8);
-  --bg-mobilenav: rgba(255, 255, 255, 0.9);
+  --bg-topbar:    rgba(245, 244, 240, 0.85);
+  --bg-mobilenav: rgba(236, 234, 230, 0.95);
   --hover-bg:     rgba(0, 0, 0, 0.05);
-  --active-bg:    rgba(0, 0, 0, 0.06);
-  --text-primary:   rgba(0, 0, 0, 0.87);
-  --text-secondary: rgba(0, 0, 0, 0.55);
-  --text-muted:     rgba(0, 0, 0, 0.35);
+  --active-bg:    rgba(29, 78, 216, 0.08);
+  --text-primary:   #1C1C1E;
+  --text-secondary: #48484A;
+  --text-muted:     #6C6C70;
   --border:       rgba(0, 0, 0, 0.08);
+}
+
+/* ── Reglas específicas del modo claro ─────────────────────────────────────── */
+
+.light body {
+  background-color: #F5F4F0;
+  color: #1C1C1E;
+}
+
+/* Sidebar en claro */
+.light aside {
+  background-color: #ECEAE6 !important;
+  border-right-color: rgba(0,0,0,0.08) !important;
+}
+
+/* Topbar en claro */
+.light header {
+  background-color: rgba(245,244,240,0.85) !important;
+  border-bottom-color: rgba(0,0,0,0.08) !important;
+}
+
+/* Cards en claro */
+.light .bg-\[\#1E1E28\] {
+  background-color: #FFFFFF !important;
+  border-color: rgba(0,0,0,0.08) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+}
+
+/* Fondo base en claro */
+.light .bg-\[\#09090E\],
+.light .bg-\[\#111118\],
+.light .bg-\[\#18181F\] {
+  background-color: #F5F4F0 !important;
+}
+
+/* Texto en claro */
+.light .text-white\/90,
+.light .text-white\/80 {
+  color: #1C1C1E !important;
+}
+.light .text-white\/60,
+.light .text-white\/55,
+.light .text-white\/50 {
+  color: #48484A !important;
+}
+.light .text-white\/40,
+.light .text-white\/35,
+.light .text-white\/30,
+.light .text-white\/25 {
+  color: #6C6C70 !important;
+}
+
+/* Inputs en claro */
+.light input,
+.light textarea,
+.light select {
+  background-color: #FFFFFF !important;
+  border-color: rgba(0,0,0,0.15) !important;
+  color: #1C1C1E !important;
+}
+.light input::placeholder,
+.light textarea::placeholder {
+  color: #AEAEB2 !important;
+}
+
+/* Nav items hover en claro */
+.light .hover\:bg-white\/\[0\.06\]:hover {
+  background-color: rgba(0,0,0,0.05) !important;
+}
+.light .bg-white\/\[0\.08\] {
+  background-color: rgba(29,78,216,0.08) !important;
+}
+
+/* Mobile nav en claro */
+.light nav.fixed.bottom-0 {
+  background-color: rgba(236,234,230,0.95) !important;
+  border-top-color: rgba(0,0,0,0.08) !important;
+}
+
+/* Bordes en claro */
+.light .border-white\/\[0\.08\] {
+  border-color: rgba(0,0,0,0.08) !important;
+}
+
+/* Active bar sidebar en claro */
+.light .bg-blue-500 {
+  background-color: #1D4ED8 !important;
+}
+
+/* Search pill en Topbar */
+.light .bg-white\/\[0\.05\] {
+  background-color: rgba(0,0,0,0.05) !important;
+  border-color: rgba(0,0,0,0.10) !important;
+}
+
+/* Scrollbar en claro */
+.light ::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.15);
 }
 
 html {
