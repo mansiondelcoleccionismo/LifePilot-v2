@@ -116,15 +116,18 @@ export async function syncFromSheets(): Promise<WealthAsset[]> {
     throw new Error(`Columna "Valor (€)" no encontrada. Cabeceras: ${headerRow.join(' | ')}`)
   }
 
-  // Data rows: from header+1, stop reading when Nombre is empty
-  const dataRows = rows.slice(headerRowIdx + 1).filter(row => {
+  // Data rows: read from header+1 and STOP at the first empty Nombre cell.
+  // The sheet has extra sections below (distribution tables, history) that we must ignore.
+  const dataRows: string[][] = []
+  for (const row of rows.slice(headerRowIdx + 1)) {
     const nombre = row[nombreCol]?.replace(/^"|"$/g, '').trim()
-    if (!nombre) return false
-    if (nombre.toUpperCase().includes('TOTAL')) return false
-    if (SKIP_NOMBRE.some(s => nombre.toLowerCase().includes(s))) return false
+    if (!nombre) break  // empty Nombre = end of asset block, stop here
+    if (nombre.toUpperCase().includes('TOTAL')) continue
+    if (SKIP_NOMBRE.some(s => nombre.toLowerCase().includes(s))) continue
     const valor = parseEuro(row[valorCol] ?? '')
-    return !isNaN(valor) && valor > 0
-  })
+    if (isNaN(valor) || valor <= 0) continue
+    dataRows.push(row)
+  }
 
   console.log(`[Sheets] ${dataRows.length} activos válidos:`)
   dataRows.forEach((r, i) => {
