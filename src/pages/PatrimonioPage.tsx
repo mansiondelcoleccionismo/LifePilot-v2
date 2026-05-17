@@ -199,135 +199,86 @@ function AnalysisDisplay({ analysis, onForce, loading }: {
   onForce: () => void
   loading: boolean
 }) {
-  const score = analysis.puntuacion
-  const scoreColor = score >= 8 ? 'text-emerald-400' : score >= 6 ? 'text-blue-400' : score >= 4 ? 'text-amber-400' : 'text-red-400'
-  const scoreLabel = score >= 8 ? 'Excelente gestión' : score >= 6 ? 'Buena base' : score >= 4 ? 'Necesita ajustes' : 'Atención necesaria'
+  const { puntuacion: score, resumen, puntos_fuertes, areas_mejora, recomendacion_principal } = analysis
+  const isRawFallback = score === 0 && puntos_fuertes.length === 0
 
-  const PRIORIDAD_CFG = {
-    inmediata:    { label: '🔴 Inmediata',    bg: 'bg-red-500/15 border-red-500/25',    text: 'text-red-300' },
-    corto_plazo:  { label: '🟡 Corto plazo',  bg: 'bg-amber-500/15 border-amber-500/25', text: 'text-amber-300' },
-    largo_plazo:  { label: '🔵 Largo plazo',  bg: 'bg-blue-500/15 border-blue-500/25',   text: 'text-blue-300' },
-  }
-  const NIVEL_CFG = {
-    bajo:  { label: 'Bajo',  bg: 'bg-emerald-500/15 border-emerald-500/25', text: 'text-emerald-300' },
-    medio: { label: 'Medio', bg: 'bg-amber-500/15 border-amber-500/25',    text: 'text-amber-300' },
-    alto:  { label: 'Alto',  bg: 'bg-red-500/15 border-red-500/25',        text: 'text-red-300' },
-  }
+  const scoreColor = score >= 8 ? 'text-emerald-400' : score >= 6 ? 'text-blue-400' : 'text-amber-400'
+  const scoreBg    = score >= 8 ? 'bg-emerald-500/10 border-emerald-500/25' : score >= 6 ? 'bg-blue-500/10 border-blue-500/25' : 'bg-amber-500/10 border-amber-500/25'
+  const scoreLabel = score >= 8 ? 'Excelente gestión' : score >= 6 ? 'Buena base' : score >= 4 ? 'Necesita ajustes' : 'Requiere atención'
 
   return (
     <div className="space-y-4">
-      {/* Score + refresh */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className={`text-5xl font-bold ${scoreColor}`}>{score}</span>
+      {/* Date + refresh */}
+      <div className="flex items-center justify-end gap-3">
+        <p className="text-xs text-white/30">
+          {analysis.generatedAt.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+        </p>
+        <button
+          onClick={onForce}
+          disabled={loading}
+          className="flex items-center gap-1 text-xs text-white/40 hover:text-amber-400 transition disabled:opacity-40"
+        >
+          <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Actualizar
+        </button>
+      </div>
+
+      {/* Score card */}
+      {!isRawFallback && (
+        <div className={`rounded-2xl border ${scoreBg} p-4 flex items-center gap-4`}>
+          <p className={`text-5xl font-bold tabular-nums ${scoreColor}`}>
+            {score}<span className="text-xl text-white/30">/10</span>
+          </p>
           <div>
-            <p className={`text-sm font-semibold ${scoreColor}`}>{scoreLabel}</p>
-            <p className="text-xs text-white/30">Salud financiera · /10</p>
+            <p className={`font-semibold ${scoreColor}`}>{scoreLabel}</p>
+            <p className="text-xs text-white/40 mt-0.5">Salud financiera global</p>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-white/30 mb-1">
-            {analysis.generatedAt.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
-          </p>
-          <button
-            onClick={onForce}
-            disabled={loading}
-            className="flex items-center gap-1 text-xs text-white/40 hover:text-amber-400 transition disabled:opacity-40"
-          >
-            <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Actualizar
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Resumen */}
       <div className="rounded-2xl bg-amber-500/8 border border-amber-500/20 p-4">
-        <p className="text-sm text-white/80 leading-relaxed">{analysis.resumen}</p>
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-500/60 mb-2">Resumen</p>
+        <p className="text-sm text-white/80 leading-relaxed">{resumen}</p>
       </div>
 
       {/* Puntos fuertes + Áreas mejora */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-2xl bg-emerald-500/5 border border-emerald-500/15 p-4">
-          <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-3">✅ Puntos fuertes</p>
-          <ul className="space-y-2">
-            {analysis.puntos_fuertes.map((p, i) => (
-              <li key={i} className="text-sm text-white/70 flex gap-2"><span className="text-emerald-400 shrink-0">✓</span>{p}</li>
-            ))}
-          </ul>
+      {(puntos_fuertes.length > 0 || areas_mejora.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {puntos_fuertes.length > 0 && (
+            <div className="rounded-2xl bg-emerald-500/5 border border-emerald-500/15 p-4">
+              <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-3">Puntos fuertes</p>
+              <ul className="space-y-2">
+                {puntos_fuertes.map((p, i) => (
+                  <li key={i} className="text-sm text-white/70 flex gap-2">
+                    <span className="shrink-0">✅</span>{p}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {areas_mejora.length > 0 && (
+            <div className="rounded-2xl bg-amber-500/5 border border-amber-500/15 p-4">
+              <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-3">Áreas de mejora</p>
+              <ul className="space-y-2">
+                {areas_mejora.map((a, i) => (
+                  <li key={i} className="text-sm text-white/70 flex gap-2">
+                    <span className="shrink-0">⚠️</span>{a}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
-        <div className="rounded-2xl bg-amber-500/5 border border-amber-500/15 p-4">
-          <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-3">⚠️ Áreas de mejora</p>
-          <ul className="space-y-2">
-            {analysis.areas_mejora.map((a, i) => (
-              <li key={i} className="text-sm text-white/70 flex gap-2"><span className="text-amber-400 shrink-0">!</span>{a}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
+      )}
 
-      {/* Riesgos */}
-      <div>
-        <p className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3">Riesgos identificados</p>
-        <div className="space-y-2">
-          {analysis.riesgos.map((r, i) => {
-            const cfg = NIVEL_CFG[r.nivel as keyof typeof NIVEL_CFG] ?? NIVEL_CFG.medio
-            return (
-              <div key={i} className={`rounded-2xl border ${cfg.bg} p-3`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.text}`}>{cfg.label}</span>
-                  <span className="text-sm font-semibold text-white/80">{r.tipo}</span>
-                </div>
-                <p className="text-xs text-white/60 mb-1">{r.descripcion}</p>
-                <p className="text-xs text-white/50 italic">→ {r.solucion}</p>
-              </div>
-            )
-          })}
+      {/* Recomendación principal */}
+      {recomendacion_principal && (
+        <div className="rounded-2xl bg-blue-500/10 border border-blue-500/25 p-4">
+          <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">💡 Recomendación principal</p>
+          <p className="text-sm text-white/80">{recomendacion_principal}</p>
         </div>
-      </div>
+      )}
 
-      {/* Recomendaciones */}
-      <div>
-        <p className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3">Recomendaciones</p>
-        <div className="space-y-2">
-          {[...analysis.recomendaciones]
-            .sort((a, b) => {
-              const o = { inmediata: 0, corto_plazo: 1, largo_plazo: 2 }
-              return (o[a.prioridad as keyof typeof o] ?? 2) - (o[b.prioridad as keyof typeof o] ?? 2)
-            })
-            .map((r, i) => {
-              const cfg = PRIORIDAD_CFG[r.prioridad as keyof typeof PRIORIDAD_CFG] ?? PRIORIDAD_CFG.largo_plazo
-              return (
-                <div key={i} className={`rounded-2xl border ${cfg.bg} p-3`}>
-                  <div className="flex items-start gap-2">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.text} shrink-0 mt-0.5`}>{cfg.label}</span>
-                    <div>
-                      <p className="text-sm font-semibold text-white/85">{r.accion}</p>
-                      <p className="text-xs text-white/55 mt-0.5">{r.razon}</p>
-                      <p className="text-xs text-white/40 mt-0.5 italic">Impacto: {r.impacto}</p>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-        </div>
-      </div>
-
-      {/* Proyección */}
-      <div>
-        <p className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3">Proyección estimada</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-2xl bg-[#1a1a24] border border-white/8 p-4 text-center">
-            <p className="text-xs text-white/35 mb-1">En 5 años</p>
-            <p className="text-lg font-bold text-amber-400">{analysis.proyeccion.a_5_anos}</p>
-          </div>
-          <div className="rounded-2xl bg-[#1a1a24] border border-white/8 p-4 text-center">
-            <p className="text-xs text-white/35 mb-1">En 10 años</p>
-            <p className="text-lg font-bold text-amber-400">{analysis.proyeccion.a_10_anos}</p>
-          </div>
-        </div>
-        <p className="text-xs text-white/25 mt-2 italic px-1">{analysis.proyeccion.supuesto}</p>
-      </div>
-
-      {/* Disclaimer */}
       <p className="text-[10px] text-white/20 text-center pt-2 leading-relaxed">
         Este análisis es orientativo y no constituye asesoramiento financiero profesional.
         Consulta con un asesor certificado para decisiones importantes.
@@ -478,43 +429,60 @@ export function PatrimonioPage() {
           if (ageMs < 7 * 86400000) { setAnalysis(cached); setAnalysisLoading(false); return }
         }
       }
-      // Build prompt
+
       const t = calcTotal(assets)
       const bd = calcBreakdown(assets)
-      const assetsStr = assets.map(a => `- ${a.nombre} (${a.plataforma}): ${fmtEur(a.valor, 2)} — ${a.tipoProducto} [${a.tipoActivo}]`).join('\n')
-      const histStr = snapshots.length > 0
-        ? [...snapshots].sort((a, b) => a.date.localeCompare(b.date)).slice(-6).map(s => `${s.date}: ${fmtEur(s.totalEUR, 0)}`).join('\n')
-        : 'Sin histórico disponible'
+      const assetsStr = assets
+        .map(a => `${a.nombre} (${a.plataforma}): ${fmtEur(a.valor, 0)} — ${((a.valor / t) * 100).toFixed(0)}%`)
+        .join('\n')
 
-      const prompt = `Eres un asesor financiero independiente experto en inversión para particulares. Analiza el patrimonio de Daniel (35 años, España, objetivo: independencia financiera a largo plazo, ingresos medios, tiene una hija de 3 años).
+      const prompt = `Eres asesor financiero independiente. Analiza este patrimonio de Daniel (35 años, España, objetivo independencia financiera):
 
-PATRIMONIO ACTUAL (${fmtEur(t, 2)}):
 ${assetsStr}
+Total: ${fmtEur(t, 0)}
+Liquidez ${((bd.liquidez/t)*100).toFixed(0)}% · RentaFija ${((bd.rentaFija/t)*100).toFixed(0)}% · RentaVariable ${((bd.rentaVariable/t)*100).toFixed(0)}% · Cripto ${((bd.cripto/t)*100).toFixed(0)}%
 
-DISTRIBUCIÓN:
-- Liquidez: ${fmtEur(bd.liquidez, 0)} (${((bd.liquidez/t)*100).toFixed(1)}%)
-- Renta Fija: ${fmtEur(bd.rentaFija, 0)} (${((bd.rentaFija/t)*100).toFixed(1)}%)
-- Renta Variable: ${fmtEur(bd.rentaVariable, 0)} (${((bd.rentaVariable/t)*100).toFixed(1)}%)
-- Cripto: ${fmtEur(bd.cripto, 0)} (${((bd.cripto/t)*100).toFixed(1)}%)
+Responde SOLO con este JSON sin backticks ni texto adicional:
+{"puntuacion":8,"resumen":"2 frases evaluando la situación.","puntos_fuertes":["punto1","punto2"],"areas_mejora":["mejora1","mejora2"],"recomendacion_principal":"1 acción concreta ahora."}`
 
-EVOLUCIÓN (últimos snapshots):
-${histStr}
+      const cleanJSON = (s: string) =>
+        s.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim()
 
-Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto adicional):
-{"puntuacion":8,"resumen":"párrafo 3-4 frases evaluando la situación general","puntos_fuertes":["p1","p2","p3"],"areas_mejora":["a1","a2","a3"],"riesgos":[{"tipo":"...","nivel":"bajo|medio|alto","descripcion":"...","solucion":"..."}],"recomendaciones":[{"accion":"...","prioridad":"inmediata|corto_plazo|largo_plazo","razon":"...","impacto":"..."}],"proyeccion":{"a_5_anos":"...","a_10_anos":"...","supuesto":"..."}}`
+      const raw     = await callAI(prompt, undefined, true, 800)
+      const cleaned = cleanJSON(raw)
+      const match   = cleaned.match(/\{[\s\S]*\}/)
 
-      const raw = await callAI(prompt, undefined, true, 2000)
-      const match = raw.match(/\{[\s\S]*\}/)
-      if (!match) throw new Error('Respuesta inesperada de la IA')
-      const parsed = JSON.parse(match[0])
-      const analysis: WealthAnalysis = {
-        id: 'latest',
-        ...parsed,
-        generatedAt: new Date(),
-        totalEUR: t,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let parsed: any = null
+      if (match) {
+        try { parsed = JSON.parse(match[0]) } catch { /* fall through to text fallback */ }
       }
-      await saveWealthAnalysis({ ...parsed, totalEUR: t })
-      setAnalysis(analysis)
+
+      const result: WealthAnalysis = parsed
+        ? {
+            id: 'latest',
+            puntuacion:             Number(parsed.puntuacion) || 0,
+            resumen:                String(parsed.resumen ?? ''),
+            puntos_fuertes:         Array.isArray(parsed.puntos_fuertes)  ? parsed.puntos_fuertes  : [],
+            areas_mejora:           Array.isArray(parsed.areas_mejora)    ? parsed.areas_mejora    : [],
+            recomendacion_principal: String(parsed.recomendacion_principal ?? ''),
+            generatedAt: new Date(),
+            totalEUR:    t,
+          }
+        : {
+            id: 'latest',
+            puntuacion:     0,
+            resumen:        cleaned || 'Sin respuesta de la IA',
+            puntos_fuertes: [],
+            areas_mejora:   [],
+            generatedAt: new Date(),
+            totalEUR:    t,
+          }
+
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id: _id, generatedAt: _gen, ...saveData } = result
+      await saveWealthAnalysis(saveData)
+      setAnalysis(result)
     } catch (e) {
       setAnalysisError(e instanceof Error ? e.message : 'Error al generar el análisis')
     }
