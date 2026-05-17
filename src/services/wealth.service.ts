@@ -81,14 +81,14 @@ export async function syncFromSheets(): Promise<WealthAsset[]> {
     console.log(`[Sheets] fila[${i}]:`, r.slice(0, 6).map(c => `"${c}"`).join(' | '))
   )
 
-  // Header row: first column must be exactly "Nombre"
+  // Header row: find row where ANY cell contains "Nombre"
   const headerRowIdx = rows.findIndex(
-    row => row[0]?.replace(/^"|"$/g, '').trim().toLowerCase() === 'nombre'
+    row => row.some(cell => cell.replace(/^"|"$/g, '').trim().toLowerCase() === 'nombre')
   )
 
   if (headerRowIdx < 0) {
-    const preview = rows.slice(0, 6).map((r, i) => `[${i}]="${r[0]}"`).join(', ')
-    throw new Error(`Cabecera "Nombre" no encontrada en col A. Primeras filas: ${preview}`)
+    const preview = rows.slice(0, 6).map((r, i) => `[${i}] ${r.slice(0, 4).map(c => `"${c}"`).join(' | ')}`).join(', ')
+    throw new Error(`Cabecera "Nombre" no encontrada. Primeras filas: ${preview}`)
   }
 
   const headerRow = rows[headerRowIdx].map(h => h.replace(/^"|"$/g, '').trim())
@@ -98,13 +98,14 @@ export async function syncFromSheets(): Promise<WealthAsset[]> {
   const findCol = (...names: string[]) =>
     headerLower.findIndex(h => names.some(n => h === n.toLowerCase() || h.includes(n.toLowerCase())))
 
-  const nombreCol       = 0
+  const nombreCol = headerLower.findIndex(h => h === 'nombre')
+  if (nombreCol < 0) throw new Error('Columna "Nombre" no encontrada tras detectar cabecera')
   const valorCol        = findCol('valor (€)', 'valor', 'value', 'importe', 'saldo')
   const plataformaCol   = findCol('plataforma', 'platform', 'broker')
   const tipoProductoCol = findCol('tipo producto', 'tipoproducto', 'producto')
   const tipoActivoCol   = findCol('tipo activo', 'tipoactivo')
 
-  console.log('[Sheets] Columnas detectadas:', {
+  console.log('[Sheets] Columnas detectadas (índice base 0):', {
     nombre: nombreCol, valor: valorCol, plataforma: plataformaCol,
     tipoProducto: tipoProductoCol, tipoActivo: tipoActivoCol,
   })
