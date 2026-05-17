@@ -68,8 +68,8 @@ function parseEuro(raw: string): number {
 
 export async function syncFromSheets(): Promise<WealthAsset[]> {
   const sheetUrl =
-    `https://docs.google.com/spreadsheets/d/${SHEETS_ID}/gviz/tq` +
-    `?tqx=out:csv&sheet=ACTIVOS`
+    `https://docs.google.com/spreadsheets/d/${SHEETS_ID}/export` +
+    `?format=csv&sheet=ACTIVOS`
   console.log('[Sheets] Fetching pestaña ACTIVOS:', sheetUrl)
   const res = await fetchWithCorsProxy(sheetUrl)
   if (!res.ok) throw new Error(`HTTP ${res.status} al leer la pestaña ACTIVOS`)
