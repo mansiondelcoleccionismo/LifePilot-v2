@@ -126,11 +126,35 @@ async function resizeAndEncode(file: File): Promise<{ data: string; mimeType: st
 interface PhotoFood { nombre: string; gramos: number; kcal: number; protein: number; carbs: number; fat: number }
 interface PhotoResult { descripcion: string; alimentos: PhotoFood[]; totales: { kcal: number; protein: number; carbs: number; fat: number } }
 
-function cleanJSON(text: string): string {
-  return text
-    .replace(/```json\n?/g, '')
-    .replace(/```\n?/g, '')
-    .trim()
+function cleanJSON(raw: string): string {
+  // Strip backtick fences
+  let s = raw.replace(/```[\w]*\r?\n?/g, '').trim()
+
+  // Extract the outermost JSON object
+  const first = s.indexOf('{')
+  const last  = s.lastIndexOf('}')
+  if (first === -1 || last === -1) return s
+  s = s.slice(first, last + 1)
+
+  // Walk char-by-char: escape literal control chars inside string values
+  let out = ''
+  let inStr = false
+  let esc = false
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]
+    if (esc)          { out += ch; esc = false; continue }
+    if (ch === '\\' && inStr) { esc = true; out += ch; continue }
+    if (ch === '"')   { inStr = !inStr; out += ch; continue }
+    if (inStr) {
+      if (ch === '\n') { out += '\\n'; continue }
+      if (ch === '\r') { out += '\\r'; continue }
+      if (ch === '\t') { out += '\\t'; continue }
+    }
+    out += ch
+  }
+
+  // Remove trailing commas before } or ]
+  return out.replace(/,(\s*[}\]])/g, '$1')
 }
 
 async function analyzePhoto(file: File): Promise<PhotoResult> {
@@ -189,12 +213,9 @@ INSTRUCCIONES:
 
       const responseText = await callAI(prompt, undefined, true, 4000)
 
-      let cleaned = cleanJSON(responseText)
-      const first = cleaned.indexOf('{')
-      const last  = cleaned.lastIndexOf('}')
-      if (first === -1 || last === -1)
+      const cleaned = cleanJSON(responseText)
+      if (!cleaned.startsWith('{'))
         throw new Error(`JSON no encontrado en respuesta: ${cleaned.slice(0, 200)}`)
-      cleaned = cleaned.slice(first, last + 1)
 
       let parsed: AIFoodResult
       try {
