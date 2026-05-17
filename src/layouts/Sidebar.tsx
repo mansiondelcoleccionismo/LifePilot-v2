@@ -22,7 +22,7 @@ export function SidebarContent({ collapsed = false }: { collapsed?: boolean }) {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="px-3 pt-3 pb-1.5 text-[10px] font-semibold tracking-widest uppercase text-white/25 select-none"
+                className="px-3 pt-3 pb-1.5 text-[10px] font-semibold tracking-widest uppercase text-(--text-muted) select-none"
               >
                 {group.label}
               </motion.p>
@@ -38,8 +38,8 @@ export function SidebarContent({ collapsed = false }: { collapsed?: boolean }) {
                   key={item.id}
                   to={item.path}
                   title={collapsed ? item.label : undefined}
-                  className="relative flex items-center gap-3 rounded-[10px] px-3 py-2.5 transition-colors duration-150 hover:bg-white/6 group"
-                  style={{ color: isActive ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.50)' }}
+                  className="relative flex items-center gap-3 rounded-[10px] px-3 py-2.5 transition-colors duration-150 hover:bg-(--hover-bg) group"
+                  style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}
                 >
                   {isActive && (
                     <motion.div
@@ -51,7 +51,7 @@ export function SidebarContent({ collapsed = false }: { collapsed?: boolean }) {
                   <Icon
                     size={18}
                     strokeWidth={isActive ? 2 : 1.75}
-                    className={isActive ? 'text-blue-400 shrink-0' : 'text-white/35 shrink-0'}
+                    className={isActive ? 'text-blue-400 shrink-0' : 'text-(--text-muted) shrink-0'}
                   />
                   <AnimatePresence>
                     {!collapsed && (
@@ -91,10 +91,10 @@ export function Sidebar() {
     <motion.aside
       animate={{ width: sidebarCollapsed ? 64 : 240 }}
       transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
-      className="fixed left-0 top-0 bottom-0 z-30 hidden lg:flex flex-col h-dvh overflow-hidden bg-[#111118] border-r border-white/8"
+      className="fixed left-0 top-0 bottom-0 z-30 hidden lg:flex flex-col h-dvh overflow-hidden bg-(--bg-card) border-r border-(--border)"
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-14 border-b border-white/8 shrink-0">
+      <div className="flex items-center gap-3 px-4 h-14 border-b border-(--border) shrink-0">
         <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
           <Zap size={14} className="text-white fill-white" />
         </div>
@@ -107,8 +107,8 @@ export function Sidebar() {
               transition={{ duration: 0.15 }}
               className="flex flex-col leading-tight overflow-hidden"
             >
-              <span className="text-sm font-semibold text-white/90 whitespace-nowrap">LifePilot</span>
-              <span className="text-[10px] text-white/30 uppercase tracking-widest">v2.0</span>
+              <span className="text-sm font-semibold text-(--text-primary) whitespace-nowrap">LifePilot</span>
+              <span className="text-[10px] text-(--text-muted) uppercase tracking-widest">v2.0</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -117,10 +117,10 @@ export function Sidebar() {
       <SidebarContent collapsed={sidebarCollapsed} />
 
       {/* Collapse button */}
-      <div className="border-t border-white/8 px-2 py-3">
+      <div className="border-t border-(--border) px-2 py-3">
         <button
           onClick={toggleSidebarCollapse}
-          className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors"
+          className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-(--text-muted) hover:text-(--text-secondary) hover:bg-(--hover-bg) transition-colors"
         >
           {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           <AnimatePresence>

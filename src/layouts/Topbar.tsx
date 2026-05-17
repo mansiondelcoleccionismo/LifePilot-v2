@@ -103,12 +103,12 @@ export function Topbar() {
 
   return (
     <header
-      className="fixed top-0 right-0 z-20 h-14 flex items-center px-4 gap-3 bg-[#09090E]/80 backdrop-blur-xl border-b border-white/8 transition-[left] duration-280"
+      className="fixed top-0 right-0 z-20 h-14 flex items-center px-4 gap-3 bg-(--bg-topbar) backdrop-blur-xl border-b border-(--border) transition-[left] duration-280"
       style={{ left: typeof window !== 'undefined' && window.innerWidth >= 1024 ? (sidebarCollapsed ? 64 : 240) : 0 }}
     >
       {/* Mobile menu */}
       <button
-        className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg text-white/50 hover:text-white/80 hover:bg-white/6 transition-colors"
+        className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--hover-bg) transition-colors"
         onClick={() => setMobileMenuOpen(true)}
       >
         <Menu size={18} />
@@ -122,7 +122,7 @@ export function Topbar() {
           initial={{ opacity: 0, x: -6 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.2 }}
-          className="text-sm font-semibold text-white/80 truncate"
+          className="text-sm font-semibold text-(--text-primary) truncate"
         >
           {label}
         </motion.h1>
@@ -131,7 +131,7 @@ export function Topbar() {
       {/* Actions */}
       <div className="flex items-center gap-1">
         {/* Search (decorative for now) */}
-        <button className="hidden md:flex items-center gap-2 h-8 px-3 rounded-lg bg-white/5 border border-white/8 text-white/35 hover:text-white/60 text-xs transition-colors">
+        <button className="hidden md:flex items-center gap-2 h-8 px-3 rounded-lg bg-(--hover-bg) border border-(--border) text-(--text-muted) hover:text-(--text-secondary) text-xs transition-colors">
           <Search size={13} />
           <span>Buscar</span>
           <kbd className="bg-white/8 px-1.5 py-0.5 rounded text-[10px] font-mono">⌘K</kbd>
@@ -141,7 +141,7 @@ export function Topbar() {
         <button
           onClick={toggle}
           title={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white/70 hover:bg-white/6 transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-(--text-muted) hover:text-(--text-secondary) hover:bg-(--hover-bg) transition-colors"
         >
           {isDark ? <Sun size={15} /> : <Moon size={15} />}
         </button>
@@ -150,7 +150,7 @@ export function Topbar() {
         <div className="relative" ref={notifRef}>
           <button
             onClick={() => { setNotifOpen((o) => !o); setProfileOpen(false) }}
-            className="relative w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white/70 hover:bg-white/6 transition-colors"
+            className="relative w-8 h-8 flex items-center justify-center rounded-lg text-(--text-muted) hover:text-(--text-secondary) hover:bg-(--hover-bg) transition-colors"
           >
             <Bell size={15} />
             {/* Red badge for pending tasks */}
@@ -172,11 +172,11 @@ export function Topbar() {
                 initial="hidden"
                 animate="visible"
                 exit="exit"
-                className="absolute top-full right-0 mt-2 w-80 rounded-2xl bg-[#16161f] border border-white/10 shadow-2xl shadow-black/50 overflow-hidden origin-top-right"
+                className="absolute top-full right-0 mt-2 w-80 rounded-2xl bg-(--bg-popup) border border-(--border) shadow-2xl shadow-black/50 overflow-hidden origin-top-right"
               >
                 {/* Header */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-white/6">
-                  <span className="text-sm font-semibold text-white/90">Notificaciones</span>
+                <div className="flex items-center justify-between px-4 py-3 border-b border-(--border)">
+                  <span className="text-sm font-semibold text-(--text-primary)">Notificaciones</span>
                   {unreadCount > 0 && (
                     <button
                       onClick={markAllAsRead}
@@ -190,7 +190,7 @@ export function Topbar() {
                 {/* List */}
                 <div className="max-h-85 overflow-y-auto">
                   {notifications.length === 0 ? (
-                    <div className="py-12 text-center text-sm text-white/30">
+                    <div className="py-12 text-center text-sm text-(--text-muted)">
                       No tienes notificaciones
                     </div>
                   ) : (
@@ -198,18 +198,18 @@ export function Topbar() {
                       <button
                         key={n.id}
                         onClick={() => markAsRead(n.id)}
-                        className={`w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-white/4 transition border-b border-white/4 last:border-0 ${n.read ? 'opacity-50' : ''}`}
+                        className={`w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-(--hover-bg) transition border-b border-(--border) last:border-0 ${n.read ? 'opacity-50' : ''}`}
                       >
                         <NotifIcon type={n.type} />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white/85 flex items-center gap-1.5 leading-snug">
+                          <p className="text-sm font-medium text-(--text-primary) flex items-center gap-1.5 leading-snug">
                             {n.title}
                             {!n.read && (
                               <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
                             )}
                           </p>
-                          <p className="text-xs text-white/40 mt-0.5 leading-snug">{n.body}</p>
-                          <p className="text-[10px] text-white/25 mt-1">{relativeTime(n.createdAt)}</p>
+                          <p className="text-xs text-(--text-secondary) mt-0.5 leading-snug">{n.body}</p>
+                          <p className="text-[10px] text-(--text-muted) mt-1">{relativeTime(n.createdAt)}</p>
                         </div>
                       </button>
                     ))
@@ -239,10 +239,10 @@ export function Topbar() {
                 initial="hidden"
                 animate="visible"
                 exit="exit"
-                className="absolute top-full right-0 mt-2 w-64 rounded-2xl bg-[#16161f] border border-white/10 shadow-2xl shadow-black/50 overflow-hidden origin-top-right"
+                className="absolute top-full right-0 mt-2 w-64 rounded-2xl bg-(--bg-popup) border border-(--border) shadow-2xl shadow-black/50 overflow-hidden origin-top-right"
               >
                 {/* User header */}
-                <div className="px-4 py-4 flex items-center gap-3 border-b border-white/6">
+                <div className="px-4 py-4 flex items-center gap-3 border-b border-(--border)">
                   <div className="w-10 h-10 rounded-full bg-linear-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-sm font-semibold shrink-0 overflow-hidden">
                     {avatarUrl
                       ? <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
@@ -250,8 +250,8 @@ export function Topbar() {
                     }
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white/90 truncate">{name}</p>
-                    <p className="text-xs text-white/35 truncate">{email}</p>
+                    <p className="text-sm font-semibold text-(--text-primary) truncate">{name}</p>
+                    <p className="text-xs text-(--text-muted) truncate">{email}</p>
                   </div>
                 </div>
 
@@ -259,29 +259,29 @@ export function Topbar() {
                 <div className="py-1.5">
                   <button
                     onClick={() => goTo('perfil')}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white/90 hover:bg-white/5 transition"
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--hover-bg) transition"
                   >
-                    <User size={15} className="text-white/40" />
+                    <User size={15} className="text-(--text-muted)" />
                     Mi perfil
                   </button>
                   <button
                     onClick={() => goTo('ajustes')}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white/90 hover:bg-white/5 transition"
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--hover-bg) transition"
                   >
-                    <Settings size={15} className="text-white/40" />
+                    <Settings size={15} className="text-(--text-muted)" />
                     Configuración
                   </button>
                   <button
                     onClick={() => goTo('ajustes')}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white/90 hover:bg-white/5 transition"
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--hover-bg) transition"
                   >
-                    <Palette size={15} className="text-white/40" />
+                    <Palette size={15} className="text-(--text-muted)" />
                     Apariencia
                   </button>
                 </div>
 
                 {/* Divider + logout */}
-                <div className="border-t border-white/6 py-1.5">
+                <div className="border-t border-(--border) py-1.5">
                   <button
                     onClick={() => { logout(); setProfileOpen(false) }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-400 hover:text-rose-300 hover:bg-rose-500/6 transition"

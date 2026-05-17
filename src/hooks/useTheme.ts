@@ -11,7 +11,9 @@ function resolveIsDark(theme: Theme): boolean {
 }
 
 function applyTheme(theme: Theme) {
-  document.documentElement.classList.toggle('dark', resolveIsDark(theme))
+  const isDark = resolveIsDark(theme)
+  document.documentElement.classList.toggle('dark', isDark)
+  document.documentElement.classList.toggle('light', !isDark)
 }
 
 export function useTheme() {
