@@ -1,3 +1,4 @@
+import { fetchWithCorsProxy } from '@/lib/cors-proxy'
 import {
   collection,
   addDoc,
@@ -69,10 +70,8 @@ export async function syncFromSheets(): Promise<WealthAsset[]> {
   const sheetUrl =
     `https://docs.google.com/spreadsheets/d/${SHEETS_ID}/gviz/tq` +
     `?tqx=out:csv&sheet=ACTIVOS`
-  const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(sheetUrl)}`
-
-  console.log('[Sheets] Fetching pestaña ACTIVOS:', proxyUrl)
-  const res = await fetch(proxyUrl)
+  console.log('[Sheets] Fetching pestaña ACTIVOS:', sheetUrl)
+  const res = await fetchWithCorsProxy(sheetUrl)
   if (!res.ok) throw new Error(`HTTP ${res.status} al leer la pestaña ACTIVOS`)
   const csv = await res.text()
 

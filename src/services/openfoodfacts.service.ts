@@ -1,3 +1,5 @@
+import { fetchWithCorsProxy } from '@/lib/cors-proxy'
+
 export interface OpenFoodResult {
   id: string
   name: string
@@ -18,10 +20,8 @@ export async function searchFoods(query: string): Promise<OpenFoodResult[]> {
     `&search_simple=1&action=process&json=1&page_size=20` +
     `&fields=id,_id,code,product_name,product_name_es,brands,nutriments,image_front_small_url`
 
-  const url = `https://corsproxy.io/?${encodeURIComponent(offUrl)}`
-
   try {
-    const res = await fetch(url)
+    const res = await fetchWithCorsProxy(offUrl)
     if (!res.ok) return []
     const data = await res.json()
     const products: unknown[] = data.products ?? []

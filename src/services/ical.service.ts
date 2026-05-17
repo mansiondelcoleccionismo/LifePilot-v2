@@ -1,3 +1,5 @@
+import { fetchWithCorsProxy } from '@/lib/cors-proxy'
+
 const DEFAULT_URL = 'https://p129-caldav.icloud.com/published/2/NDEyMjgxMzAyNDEyMjgxMw4vhUTJs67jeqBZcAXkEN1UPUWQcn2AmZAM5LbiBqRm'
 const URL_KEY     = 'lifepilot_ical_url'
 const CACHE_KEY   = 'lifepilot_ical_cache'
@@ -149,10 +151,9 @@ export async function fetchICalEvents(forceRefresh = false): Promise<ICalEvent[]
   }
 
   const url = getICalUrl()
-  const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(url)}`
 
   try {
-    const res = await fetch(proxyUrl, { headers: { Accept: 'text/calendar' } })
+    const res = await fetchWithCorsProxy(url, { headers: { Accept: 'text/calendar' } })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const text = await res.text()
     if (!text.includes('BEGIN:VCALENDAR')) throw new Error('Not a valid iCal feed')
@@ -203,9 +204,8 @@ export async function getMonthICalEvents(year: number, month: number): Promise<I
 // ── Connection test ───────────────────────────────────────────────────────────
 
 export async function testICalUrl(url: string): Promise<string | null> {
-  const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(url)}`
   try {
-    const res  = await fetch(proxyUrl, { headers: { Accept: 'text/calendar' } })
+    const res  = await fetchWithCorsProxy(url, { headers: { Accept: 'text/calendar' } })
     if (!res.ok) return `Error HTTP ${res.status}`
     const text = await res.text()
     if (!text.includes('BEGIN:VCALENDAR')) return 'La URL no contiene un calendario iCal válido'

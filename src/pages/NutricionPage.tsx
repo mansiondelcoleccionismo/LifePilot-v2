@@ -194,10 +194,10 @@ INSTRUCCIONES ESTRICTAS:
 6. Calcula multiplicando (gramos/100) × macros_por_100g
 7. Sé conservador — es mejor quedarse corto que exagerar
 
-Responde ÚNICAMENTE con JSON sin texto adicional:
+Responde ÚNICAMENTE con el objeto JSON completo y cerrado. Asegúrate de cerrar todos los corchetes y llaves. No añadas texto antes ni después:
 {"descripcion":"nombre del plato","gramos_totales":0,"kcal":0,"protein":0,"carbs":0,"fat":0,"desglose":[{"nombre":"ingrediente","gramos":0,"kcal":0,"protein":0,"carbs":0,"fat":0}]}`
 
-      const responseText = await callAI(prompt, undefined, true)
+      const responseText = await callAI(prompt, undefined, true, 2000)
 
       let cleaned = cleanJSON(responseText)
       const first = cleaned.indexOf('{')
