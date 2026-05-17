@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import './styles/light-theme.css';
 @variant dark (&:where(.dark, .dark *));
 
 :root {
@@ -58,108 +59,6 @@
 
   background-color: #F5F4F0;
   color: #1C1C1E;
-
-  /* ── Texto: blancos transparentes → grises legibles ─────────────────────── */
-  [class*="text-white/90"],
-  [class*="text-white/80"] { color: #1C1C1E !important; }
-
-  [class*="text-white/70"],
-  [class*="text-white/60"],
-  [class*="text-white/55"],
-  [class*="text-white/50"] { color: #3A3A3C !important; }
-
-  [class*="text-white/40"],
-  [class*="text-white/35"],
-  [class*="text-white/30"] { color: #6C6C70 !important; }
-
-  [class*="text-white/25"],
-  [class*="text-white/20"],
-  [class*="text-white/18"] { color: #8E8E93 !important; }
-
-  /* ── Fondos oscuros hardcodeados → claros ────────────────────────────────── */
-  [class*="bg-[#09090E]"],
-  [class*="bg-[#0A0A0F]"] { background-color: #F5F4F0 !important; }
-
-  [class*="bg-[#111118]"],
-  [class*="bg-[#18181F]"] { background-color: #ECEAE6 !important; }
-
-  [class*="bg-[#1E1E28]"],
-  [class*="bg-[#252530]"],
-  [class*="bg-[#2C2C3A]"],
-  [class*="bg-[#1a1a24]"],
-  [class*="bg-[#16161f]"] {
-    background-color: #FFFFFF !important;
-    border-color: rgba(0,0,0,0.08) !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
-  }
-
-  /* ── Fondos con opacidad blanca → gris muy sutil ─────────────────────────── */
-  [class*="bg-white/3"],
-  [class*="bg-white/4"],
-  [class*="bg-white/5"],
-  [class*="bg-white/6"],
-  [class*="bg-white/7"],
-  [class*="bg-white/8"],
-  [class*="bg-white/10"] { background-color: rgba(0,0,0,0.04) !important; }
-
-  /* ── Bordes con opacidad blanca → gris visible ───────────────────────────── */
-  [class*="border-white/4"],
-  [class*="border-white/5"],
-  [class*="border-white/6"],
-  [class*="border-white/8"],
-  [class*="border-white/10"],
-  [class*="border-white/12"],
-  [class*="border-white/13"],
-  [class*="border-white/15"],
-  [class*="border-white/18"] { border-color: rgba(0,0,0,0.10) !important; }
-
-  /* ── Sidebar ─────────────────────────────────────────────────────────────── */
-  aside {
-    background-color: #ECEAE6 !important;
-    border-right-color: rgba(0,0,0,0.08) !important;
-  }
-
-  /* ── Topbar ──────────────────────────────────────────────────────────────── */
-  header.fixed {
-    background-color: rgba(245,244,240,0.90) !important;
-    border-bottom-color: rgba(0,0,0,0.08) !important;
-  }
-
-  /* ── Mobile nav ──────────────────────────────────────────────────────────── */
-  nav.fixed.bottom-0 {
-    background-color: rgba(236,234,230,0.95) !important;
-    border-top-color: rgba(0,0,0,0.08) !important;
-  }
-
-  /* ── Inputs / Selects ────────────────────────────────────────────────────── */
-  input, textarea, select {
-    background-color: #FFFFFF !important;
-    border-color: rgba(0,0,0,0.15) !important;
-    color: #1C1C1E !important;
-  }
-  input::placeholder, textarea::placeholder { color: #AEAEB2 !important; }
-  option { background-color: #FFFFFF; color: #1C1C1E; }
-
-  /* ── Labels uppercase → gris legible ─────────────────────────────────────── */
-  [class*="uppercase"][class*="tracking-wide"],
-  [class*="uppercase"][class*="tracking-wider"],
-  [class*="uppercase"][class*="tracking-widest"] { color: #6C6C70 !important; }
-
-  /* ── Acento azul legible en claro ────────────────────────────────────────── */
-  [class*="text-blue-400"] { color: #1D4ED8 !important; }
-  [class*="text-blue-300"] { color: #2563EB !important; }
-
-  /* ── Gradientes oscuros → claros ─────────────────────────────────────────── */
-  [class*="from-blue-950"],
-  [class*="from-violet-950"] { --tw-gradient-from: #EEF2FF !important; }
-
-  /* ── Hover states ────────────────────────────────────────────────────────── */
-  [class*="hover:bg-white/5"]:hover,
-  [class*="hover:bg-white/6"]:hover,
-  [class*="hover:bg-white/8"]:hover { background-color: rgba(0,0,0,0.05) !important; }
-
-  /* ── Scrollbar ───────────────────────────────────────────────────────────── */
-  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
 }
 
 html {

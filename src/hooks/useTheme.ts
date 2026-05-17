@@ -14,6 +14,7 @@ function applyTheme(theme: Theme) {
   const isDark = resolveIsDark(theme)
   document.documentElement.classList.toggle('dark', isDark)
   document.documentElement.classList.toggle('light', !isDark)
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
 }
 
 export function useTheme() {
