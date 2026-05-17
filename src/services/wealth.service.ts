@@ -344,13 +344,19 @@ export async function getWealthAnalysis(): Promise<WealthAnalysis | null> {
   } as WealthAnalysis
 }
 
+function cleanForFirestore(obj: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined && v !== null),
+  )
+}
+
 export async function saveWealthAnalysis(
   analysis: Omit<WealthAnalysis, 'id' | 'generatedAt'>,
 ): Promise<void> {
-  await setDoc(doc(db, ANALYSIS_COL, 'latest'), {
+  await setDoc(doc(db, ANALYSIS_COL, 'latest'), cleanForFirestore({
     ...analysis,
     generatedAt: serverTimestamp(),
-  })
+  }))
 }
 
 // ── Formatting helpers ───────────────────────────────────────────────────────

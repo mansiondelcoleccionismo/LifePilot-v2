@@ -218,8 +218,8 @@ function parseFinancialAnalysis(text: string) {
     riesgos:       (getSection('RIESGOS') || '')
       .split('\n').filter(l => l.trim().startsWith('-'))
       .map(l => l.replace(/^-\s*/, '').trim()).filter(Boolean),
-    recomendacion: getSection('RECOMENDACIÓN PRINCIPAL') || getSection('RECOMENDACION PRINCIPAL'),
-    proyeccion:    getSection('PROYECCIÓN') || getSection('PROYECCION'),
+    recomendacion: getSection('RECOMENDACIÓN PRINCIPAL') || getSection('RECOMENDACION PRINCIPAL') || 'Continúa con tu estrategia actual',
+    proyeccion:    getSection('PROYECCIÓN') || getSection('PROYECCION') || null,
   }
 }
 
@@ -524,12 +524,12 @@ Escribe frases COMPLETAS. Máximo 400 palabras en total.`
       const result: WealthAnalysis = {
         id:                      'latest',
         puntuacion:              parsed.puntuacion,
-        resumen:                 parsed.resumen ?? clean,
-        puntos_fuertes:          parsed.puntosFuertes,
-        areas_mejora:            parsed.areasMejora,
-        recomendacion_principal: parsed.recomendacion ?? undefined,
+        resumen:                 parsed.resumen || clean,
+        puntos_fuertes:          parsed.puntosFuertes.length > 0 ? parsed.puntosFuertes : [],
+        areas_mejora:            parsed.areasMejora.length > 0  ? parsed.areasMejora   : [],
+        recomendacion_principal: parsed.recomendacion || 'Continúa con tu estrategia actual',
         riesgos_texto:           parsed.riesgos.length > 0 ? parsed.riesgos : undefined,
-        proyeccion_texto:        parsed.proyeccion ?? undefined,
+        proyeccion_texto:        parsed.proyeccion || undefined,
         generatedAt: new Date(),
         totalEUR:    t,
       }
