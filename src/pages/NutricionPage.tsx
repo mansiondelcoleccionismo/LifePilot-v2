@@ -18,7 +18,6 @@ import {
   loadPatternData, type PatternData, type FrequentFood, type FoodCombo,
 } from '@/services/nutrition-patterns.service'
 import type { UserProfile } from '@/types/profile'
-import { NUTRITION_REFERENCE } from '@/data/nutrition-reference'
 
 // ─── Meal config ─────────────────────────────────────────────────────────────
 const MEALS: Array<{ value: MealType; label: string; emoji: string; hours: [number, number] }> = [
@@ -177,27 +176,18 @@ function AIFoodModal({
     if (!input.trim()) return
     setStep('loading')
     try {
-      const refJson = JSON.stringify(NUTRITION_REFERENCE)
       const prompt =
-`Eres un nutricionista experto con acceso a una base de datos nutricional verificada.
-El usuario ha comido: ${input.trim()}
+`Eres un nutricionista experto. El usuario ha comido: ${input.trim()}
 
-TABLA DE REFERENCIA REAL (macros por 100g, úsala siempre):
-${refJson}
+INSTRUCCIONES:
+1. Identifica cada ingrediente y estima los gramos para una ración normal española
+2. Una ración de patatas fritas de acompañamiento son 150-200g máximo; un filete normal 120-150g
+3. Sé conservador — mejor quedarse corto que exagerar
+4. Responde ÚNICAMENTE con el JSON cerrado, sin texto antes ni después
 
-INSTRUCCIONES ESTRICTAS:
-1. Identifica cada ingrediente y estima los gramos de forma REALISTA para una ración normal española
-2. Usa SIEMPRE los valores de la tabla de referencia si el ingrediente aparece
-3. Para ingredientes no en la tabla, usa valores conservadores basados en alimentos similares
-4. Una ración normal de patatas fritas caseras para acompañar son 150-200g MÁXIMO
-5. Un filete normal son 120-150g
-6. Calcula multiplicando (gramos/100) × macros_por_100g
-7. Sé conservador — es mejor quedarse corto que exagerar
-
-Responde ÚNICAMENTE con el objeto JSON completo y cerrado. Asegúrate de cerrar todos los corchetes y llaves. No añadas texto antes ni después:
 {"descripcion":"nombre del plato","gramos_totales":0,"kcal":0,"protein":0,"carbs":0,"fat":0,"desglose":[{"nombre":"ingrediente","gramos":0,"kcal":0,"protein":0,"carbs":0,"fat":0}]}`
 
-      const responseText = await callAI(prompt, undefined, true, 2000)
+      const responseText = await callAI(prompt, undefined, true, 4000)
 
       let cleaned = cleanJSON(responseText)
       const first = cleaned.indexOf('{')
