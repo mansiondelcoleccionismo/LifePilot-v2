@@ -66,16 +66,16 @@ export const DEFAULT_REMINDERS: Reminder[] = [
   },
 ]
 
-// ── Timer registry ────────────────────────────────────────────────────────────
+// ── Timer registry (in-tab fallback) ─────────────────────────────────────────
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
-function msUntilNext(hour: number, minute: number, dayOfWeek?: number): number {
-  const now = new Date()
+export function msUntilNext(hour: number, minute: number, dayOfWeek?: number): number {
+  const now    = new Date()
   const target = new Date()
   target.setHours(hour, minute, 0, 0)
 
   if (dayOfWeek !== undefined) {
-    const days = (dayOfWeek - now.getDay() + 7) % 7
+    const days        = (dayOfWeek - now.getDay() + 7) % 7
     const sameDayPast = days === 0 && now.getTime() >= target.getTime()
     target.setDate(target.getDate() + (sameDayPast ? 7 : days))
   } else {
@@ -119,6 +119,77 @@ function cancelOne(id: string) {
   if (t !== undefined) { clearTimeout(t); timers.delete(id) }
 }
 
+// ── SW alarm registration ─────────────────────────────────────────────────────
+
+function swNextFireTs(hour: number, minute: number, dayOfWeek?: number): number {
+  const now    = new Date()
+  const target = new Date()
+  target.setHours(hour, minute, 0, 0)
+  if (dayOfWeek !== undefined) {
+    const diff      = (dayOfWeek - now.getDay() + 7) % 7
+    const sameAndPast = diff === 0 && now >= target
+    target.setDate(target.getDate() + (sameAndPast ? 7 : diff))
+  } else {
+    if (now >= target) target.setDate(target.getDate() + 1)
+  }
+  return target.getTime()
+}
+
+export async function registerAlarmsInSW(settings: NotificationSettings) {
+  if (!('serviceWorker' in navigator)) return
+  try {
+    const reg = await navigator.serviceWorker.ready
+    if (!reg.active) return
+    const icon   = `${location.origin}${import.meta.env.BASE_URL}favicon.svg`
+    const alarms = settings.reminders
+      .filter(r => r.enabled)
+      .map(r => ({
+        id:        r.id,
+        title:     r.title,
+        body:      r.body,
+        icon,
+        hour:      r.hour,
+        minute:    r.minute,
+        dayOfWeek: r.dayOfWeek ?? null,
+        fireAt:    swNextFireTs(r.hour, r.minute, r.dayOfWeek),
+      }))
+    reg.active.postMessage({ type: 'SET_ALARMS', alarms })
+
+    // Register periodic background sync where available (Android Chrome)
+    if ('periodicSync' in reg) {
+      try {
+        await (reg as any).periodicSync.register('lifepilot-alarms', {
+          minInterval: 60 * 60 * 1000,
+        })
+      } catch { /* permission not granted */ }
+    }
+  } catch { /* ignore */ }
+}
+
+// ── Missed reminders (last 2 h) ───────────────────────────────────────────────
+const MISSED_WINDOW_MS = 2 * 60 * 60 * 1000
+
+export function checkMissedReminders(): Reminder[] {
+  const settings = loadNotificationSettings()
+  if (!('Notification' in window) || Notification.permission !== 'granted') return []
+
+  const now    = Date.now()
+  const missed: Reminder[] = []
+
+  for (const r of settings.reminders) {
+    if (!r.enabled) continue
+    const period = r.dayOfWeek !== undefined
+      ? 7 * 24 * 3600 * 1000
+      : 24 * 3600 * 1000
+    const next = swNextFireTs(r.hour, r.minute, r.dayOfWeek)
+    const prev = next - period
+    if (prev > now - MISSED_WINDOW_MS && prev < now) {
+      missed.push(r)
+    }
+  }
+  return missed
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 export function cancelAllNotifications() {
   timers.forEach(clearTimeout)
@@ -130,7 +201,6 @@ export function loadNotificationSettings(): NotificationSettings {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as NotificationSettings
-      // Merge saved state with defaults to pick up any new reminders
       const reminders = DEFAULT_REMINDERS.map(def => {
         const saved = parsed.reminders?.find(r => r.id === def.id)
         return saved ? { ...def, ...saved } : { ...def }
@@ -145,6 +215,7 @@ export function saveNotificationSettings(settings: NotificationSettings) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
   cancelAllNotifications()
   settings.reminders.forEach(scheduleOne)
+  registerAlarmsInSW(settings)
 }
 
 export async function requestPermission(): Promise<NotificationPermission> {
@@ -156,4 +227,5 @@ export function initNotifications() {
   if (!('Notification' in window)) return
   const settings = loadNotificationSettings()
   settings.reminders.forEach(scheduleOne)
+  registerAlarmsInSW(settings)
 }

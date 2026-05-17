@@ -20,6 +20,7 @@ import {
   saveNotificationSettings,
   requestPermission,
 } from '@/services/notifications.service'
+import { generateICS } from '@/lib/ics'
 
 interface AIKeyConfig {
   id: string
@@ -160,6 +161,9 @@ export function AjustesPage() {
     'Notification' in window ? Notification.permission : 'denied',
   )
   const notifSupported = 'Notification' in window
+  const [iosStatus, setIosStatus] = useState<null | {
+    isPwa: boolean; permission: string; swActive: boolean; iosOk: boolean
+  }>(null)
   const [customMacros, setCustomMacros] = useState<CustomMacros>(defaultMacros)
   const [theme, setTheme] = useState<ThemeType>('oscuro')
   const [feedback, setFeedback] = useState('')
@@ -288,6 +292,23 @@ export function AjustesPage() {
       saveNotificationSettings(updated)
       return updated
     })
+  }
+
+  const handleCheckIosStatus = async () => {
+    const isPwa = window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true
+    const permission = 'Notification' in window ? Notification.permission : 'unsupported'
+    let swActive = false
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration()
+      swActive = !!(reg?.active)
+    }
+    const ua = navigator.userAgent
+    const iosMatch = ua.match(/OS (\d+)_/)
+    const iosVersion = iosMatch ? parseInt(iosMatch[1]) : 0
+    const isIos = /iPad|iPhone|iPod/.test(ua)
+    const iosOk = !isIos || iosVersion >= 16
+    setIosStatus({ isPwa, permission, swActive, iosOk })
   }
 
   const handleRequestPermission = async () => {
@@ -935,13 +956,48 @@ export function AjustesPage() {
             </div>
           )}
 
+          {/* iOS instructions card */}
+          <div className="rounded-2xl bg-blue-500/8 border border-blue-500/15 p-4 mb-4">
+            <p className="text-sm font-semibold text-blue-300 mb-2">📱 Para que funcionen en iPhone</p>
+            <ol className="text-xs text-blue-200/70 leading-relaxed space-y-1 list-decimal list-inside">
+              <li>Instala LifePilot: Safari → Compartir → "Añadir a inicio"</li>
+              <li>Abre la app instalada (no desde Safari)</li>
+              <li>Cuando aparezca el permiso de notificaciones → Permitir</li>
+              <li>Las notificaciones solo suenan si iOS no está en modo silencioso</li>
+            </ol>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={handleCheckIosStatus}
+                className="rounded-xl bg-blue-600/30 border border-blue-500/30 px-3 py-1.5 text-xs font-medium text-blue-300 hover:bg-blue-600/45 transition"
+              >
+                Comprobar estado
+              </button>
+            </div>
+            {iosStatus && (
+              <div className="mt-3 space-y-1">
+                {[
+                  { ok: iosStatus.isPwa,       label: 'App instalada como PWA' },
+                  { ok: iosStatus.permission === 'granted', label: 'Permiso de notificaciones concedido' },
+                  { ok: iosStatus.swActive,    label: 'Service Worker activo' },
+                  { ok: iosStatus.iosOk,       label: 'iOS 16.4 o superior (o no es iOS)' },
+                ].map(({ ok, label }) => (
+                  <div key={label} className="flex items-center gap-2 text-xs">
+                    <span>{ok ? '✅' : '❌'}</span>
+                    <span className={ok ? 'text-emerald-300/80' : 'text-rose-300/80'}>{label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Reminder rows */}
           <div className="space-y-3">
             {notifSettings.reminders.map((reminder) => {
               const meta = REMINDER_META[reminder.id]
               if (!meta) return null
-              const isWeekly = reminder.dayOfWeek !== undefined
-              const disabled = !notifSupported || notifPermission !== 'granted'
+              const isWeekly  = reminder.dayOfWeek !== undefined
+              const isPadel   = reminder.id === 'padel_lunes' || reminder.id === 'padel_miercoles'
+              const disabled  = !notifSupported || notifPermission !== 'granted'
               return (
                 <div
                   key={reminder.id}
@@ -1008,6 +1064,24 @@ export function AjustesPage() {
                                 <option key={i} value={i}>{name}</option>
                               ))}
                             </select>
+                          </div>
+                        )}
+
+                        {/* ICS download for padel reminders */}
+                        {isPadel && (
+                          <div className="flex items-end">
+                            <button
+                              onClick={() => generateICS(
+                                reminder.title,
+                                reminder.body,
+                                reminder.dayOfWeek ?? 0,
+                                reminder.hour,
+                                reminder.minute,
+                              )}
+                              className="rounded-xl bg-emerald-600/20 border border-emerald-500/25 px-3 py-2 text-xs font-medium text-emerald-300 hover:bg-emerald-600/35 transition"
+                            >
+                              📅 Añadir al calendario
+                            </button>
                           </div>
                         )}
                       </div>

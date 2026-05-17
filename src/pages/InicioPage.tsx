@@ -17,6 +17,7 @@ import {
   fetchICalEvents, getTodayICalEvents, getLastSyncTime, type ICalEvent,
 } from '@/services/ical.service'
 import { callAI, hasAnyAIKey } from '@/services/ai.service'
+import { checkMissedReminders, type Reminder } from '@/services/notifications.service'
 import { getWeatherToday, type WeatherData } from '@/services/weather.service'
 import { loadProfile, getDayKind, getTargetForDay } from '@/services/metabolic.service'
 import { subscribeDiaryEntries } from '@/services/diary.service'
@@ -115,6 +116,8 @@ export function InicioPage() {
   const [quickWeight, setQuickWeight]           = useState('')
   const [savingWeight, setSavingWeight]         = useState(false)
   const [weightSaved, setWeightSaved]           = useState(false)
+  const [missedReminders, setMissedReminders]   = useState<Reminder[]>([])
+  const [dismissedMissed, setDismissedMissed]   = useState<Set<string>>(new Set())
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const pendingTasks = useMemo(() => tasks.filter(t => !t.completed), [tasks])
@@ -172,6 +175,10 @@ export function InicioPage() {
   }, [dow, weights, weightSaved])
 
   // ── Effects ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    setMissedReminders(checkMissedReminders())
+  }, [])
+
   useEffect(() => {
     loadWeights()
     getWeatherToday().then(setWeather)
@@ -261,6 +268,26 @@ export function InicioPage() {
 
   return (
     <div className="px-4 py-6 pb-28 md:px-6 lg:px-8 max-w-5xl mx-auto space-y-5">
+
+      {/* Missed reminder banners */}
+      {missedReminders
+        .filter(r => !dismissedMissed.has(r.id))
+        .map(r => (
+          <div
+            key={r.id}
+            className="rounded-2xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 flex items-center justify-between gap-3"
+          >
+            <p className="text-sm text-amber-200/90">
+              <span className="font-semibold">⏰ Recordatorio perdido:</span> {r.title} — {r.body}
+            </p>
+            <button
+              onClick={() => setDismissedMissed(prev => new Set([...prev, r.id]))}
+              className="shrink-0 rounded-xl bg-amber-500/20 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/30 transition"
+            >
+              Entendido
+            </button>
+          </div>
+        ))}
 
       <PageHeader
         title={`${greeting}, ${firstName}.`}
