@@ -1,115 +1,357 @@
-/* ── Light theme overrides ─────────────────────────────────────────────────
-   Uses [data-theme="light"] so selectors are specific enough to override
-   Tailwind JIT-generated classes without relying on CSS nesting.
-   ─────────────────────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIGHT THEME — cobertura exhaustiva
+   Selector: [data-theme="light"] para superar la especificidad de Tailwind JIT
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Text: transparent whites → readable grays ──────────────────────────── */
+/* ── 1. TEXT — white/opacity → grises legibles ──────────────────────────── */
+
+[data-theme="light"] .text-white { color: #1C1C1E !important; }
+
 [data-theme="light"] .text-white\/90,
+[data-theme="light"] .text-white\/85,
 [data-theme="light"] .text-white\/80 { color: #1C1C1E !important; }
 
+[data-theme="light"] .text-white\/75,
 [data-theme="light"] .text-white\/70,
+[data-theme="light"] .text-white\/65,
 [data-theme="light"] .text-white\/60,
 [data-theme="light"] .text-white\/55,
 [data-theme="light"] .text-white\/50 { color: #3A3A3C !important; }
 
+[data-theme="light"] .text-white\/45,
 [data-theme="light"] .text-white\/40,
 [data-theme="light"] .text-white\/35,
 [data-theme="light"] .text-white\/30 { color: #6C6C70 !important; }
 
 [data-theme="light"] .text-white\/25,
 [data-theme="light"] .text-white\/20,
-[data-theme="light"] .text-white\/18 { color: #8E8E93 !important; }
+[data-theme="light"] .text-white\/18,
+[data-theme="light"] .text-white\/15,
+[data-theme="light"] .text-white\/12 { color: #8E8E93 !important; }
 
-/* ── Backgrounds: dark hardcoded → light ─────────────────────────────────── */
+[data-theme="light"] .text-white\/10,
+[data-theme="light"] .text-white\/8,
+[data-theme="light"] .text-white\/5 { color: #AEAEB2 !important; }
+
+/* ── 2. TEXT — colores "light" diseñados para oscuro → versión oscura legible */
+
+/* Amber / Yellow */
+[data-theme="light"] .text-amber-400  { color: #B45309 !important; }
+[data-theme="light"] .text-amber-300  { color: #92400E !important; }
+[data-theme="light"] .text-amber-200  { color: #78350F !important; }
+[data-theme="light"] .text-yellow-400 { color: #A16207 !important; }
+[data-theme="light"] .text-yellow-300 { color: #92400E !important; }
+
+/* Emerald / Green */
+[data-theme="light"] .text-emerald-400 { color: #047857 !important; }
+[data-theme="light"] .text-emerald-300 { color: #065F46 !important; }
+[data-theme="light"] .text-emerald-200 { color: #064E3B !important; }
+[data-theme="light"] .text-green-400   { color: #15803D !important; }
+[data-theme="light"] .text-green-300   { color: #166534 !important; }
+
+/* Blue */
+[data-theme="light"] .text-blue-400 { color: #1D4ED8 !important; }
+[data-theme="light"] .text-blue-300 { color: #1E40AF !important; }
+[data-theme="light"] .text-blue-200 { color: #1E3A8A !important; }
+[data-theme="light"] .text-sky-400  { color: #0369A1 !important; }
+[data-theme="light"] .text-sky-300  { color: #075985 !important; }
+
+/* Violet / Purple / Indigo */
+[data-theme="light"] .text-violet-400 { color: #6D28D9 !important; }
+[data-theme="light"] .text-violet-300 { color: #5B21B6 !important; }
+[data-theme="light"] .text-violet-200 { color: #4C1D95 !important; }
+[data-theme="light"] .text-purple-400 { color: #7E22CE !important; }
+[data-theme="light"] .text-purple-300 { color: #6B21A8 !important; }
+[data-theme="light"] .text-indigo-400 { color: #4338CA !important; }
+[data-theme="light"] .text-indigo-300 { color: #3730A3 !important; }
+[data-theme="light"] .text-indigo-200 { color: #312E81 !important; }
+
+/* Teal / Cyan */
+[data-theme="light"] .text-teal-400 { color: #0F766E !important; }
+[data-theme="light"] .text-teal-300 { color: #115E59 !important; }
+[data-theme="light"] .text-teal-200 { color: #134E4A !important; }
+[data-theme="light"] .text-cyan-400  { color: #0E7490 !important; }
+[data-theme="light"] .text-cyan-300  { color: #155E75 !important; }
+
+/* Rose / Red / Pink */
+[data-theme="light"] .text-rose-400  { color: #BE123C !important; }
+[data-theme="light"] .text-rose-300  { color: #9F1239 !important; }
+[data-theme="light"] .text-rose-200  { color: #881337 !important; }
+[data-theme="light"] .text-red-400   { color: #B91C1C !important; }
+[data-theme="light"] .text-red-300   { color: #991B1B !important; }
+[data-theme="light"] .text-red-200   { color: #7F1D1D !important; }
+[data-theme="light"] .text-pink-400  { color: #BE185D !important; }
+[data-theme="light"] .text-pink-300  { color: #9D174D !important; }
+
+/* Orange */
+[data-theme="light"] .text-orange-400 { color: #C2410C !important; }
+[data-theme="light"] .text-orange-300 { color: #9A3412 !important; }
+
+/* ── 3. FONDOS — hexadecimales oscuros → equivalentes claros ────────────── */
+
 [data-theme="light"] .bg-\[\#09090E\],
-[data-theme="light"] .bg-\[\#0A0A0F\] { background-color: #F5F4F0 !important; }
+[data-theme="light"] .bg-\[\#0A0A0F\],
+[data-theme="light"] .bg-\[\#0d0d12\] { background-color: #F5F4F0 !important; }
 
 [data-theme="light"] .bg-\[\#111118\],
-[data-theme="light"] .bg-\[\#18181F\] { background-color: #ECEAE6 !important; }
+[data-theme="light"] .bg-\[\#18181F\],
+[data-theme="light"] .bg-\[\#121218\] { background-color: #ECEAE6 !important; }
 
 [data-theme="light"] .bg-\[\#1E1E28\],
+[data-theme="light"] .bg-\[\#1e1e28\],
 [data-theme="light"] .bg-\[\#252530\],
 [data-theme="light"] .bg-\[\#2C2C3A\],
 [data-theme="light"] .bg-\[\#1a1a24\],
 [data-theme="light"] .bg-\[\#16161f\] {
   background-color: #FFFFFF !important;
-  border-color: rgba(0,0,0,0.08) !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.05) !important;
 }
 
-/* ── White opacity backgrounds → subtle gray ─────────────────────────────── */
+/* ── 4. FONDOS — white/opacity → gris suave ─────────────────────────────── */
+
+[data-theme="light"] .bg-white\/2,
 [data-theme="light"] .bg-white\/3,
 [data-theme="light"] .bg-white\/4,
 [data-theme="light"] .bg-white\/5,
 [data-theme="light"] .bg-white\/6,
 [data-theme="light"] .bg-white\/7,
-[data-theme="light"] .bg-white\/8,
-[data-theme="light"] .bg-white\/10 { background-color: rgba(0,0,0,0.04) !important; }
+[data-theme="light"] .bg-white\/8 { background-color: rgba(0,0,0,0.04) !important; }
 
-/* ── White opacity borders → visible gray ────────────────────────────────── */
+[data-theme="light"] .bg-white\/10,
+[data-theme="light"] .bg-white\/12,
+[data-theme="light"] .bg-white\/13,
+[data-theme="light"] .bg-white\/14,
+[data-theme="light"] .bg-white\/15 { background-color: rgba(0,0,0,0.06) !important; }
+
+[data-theme="light"] .bg-white\/18,
+[data-theme="light"] .bg-white\/20 { background-color: rgba(0,0,0,0.08) !important; }
+
+[data-theme="light"] .bg-white\/25,
+[data-theme="light"] .bg-white\/30 { background-color: rgba(0,0,0,0.10) !important; }
+
+/* ── 5. FONDOS COLOREADOS OSCUROS → pasteles equivalentes ───────────────── */
+
+/* Amber */
+[data-theme="light"] .bg-amber-950\/10,
+[data-theme="light"] .bg-amber-950\/15,
+[data-theme="light"] .bg-amber-950\/20,
+[data-theme="light"] .bg-amber-950\/25,
+[data-theme="light"] .bg-amber-950\/30,
+[data-theme="light"] .bg-amber-950\/40,
+[data-theme="light"] .bg-amber-950\/50 { background-color: #FFFBEB !important; }
+
+/* Blue */
+[data-theme="light"] .bg-blue-950\/10,
+[data-theme="light"] .bg-blue-950\/15,
+[data-theme="light"] .bg-blue-950\/20,
+[data-theme="light"] .bg-blue-950\/25,
+[data-theme="light"] .bg-blue-950\/30,
+[data-theme="light"] .bg-blue-950\/55 { background-color: #EFF6FF !important; }
+
+/* Violet / Purple */
+[data-theme="light"] .bg-violet-950\/10,
+[data-theme="light"] .bg-violet-950\/20,
+[data-theme="light"] .bg-violet-950\/25,
+[data-theme="light"] .bg-violet-950\/30,
+[data-theme="light"] .bg-violet-950\/55 { background-color: #F5F3FF !important; }
+
+/* Emerald / Green */
+[data-theme="light"] .bg-emerald-950\/10,
+[data-theme="light"] .bg-emerald-950\/20,
+[data-theme="light"] .bg-emerald-950\/25,
+[data-theme="light"] .bg-emerald-950\/30,
+[data-theme="light"] .bg-emerald-950\/55 { background-color: #ECFDF5 !important; }
+
+/* Teal */
+[data-theme="light"] .bg-teal-950\/10,
+[data-theme="light"] .bg-teal-950\/20,
+[data-theme="light"] .bg-teal-950\/25,
+[data-theme="light"] .bg-teal-950\/30,
+[data-theme="light"] .bg-teal-950\/55 { background-color: #F0FDFA !important; }
+
+/* Rose / Red */
+[data-theme="light"] .bg-rose-950\/10,
+[data-theme="light"] .bg-rose-950\/20,
+[data-theme="light"] .bg-rose-950\/25,
+[data-theme="light"] .bg-red-950\/10,
+[data-theme="light"] .bg-red-950\/20,
+[data-theme="light"] .bg-red-950\/25 { background-color: #FFF1F2 !important; }
+
+/* Indigo */
+[data-theme="light"] .bg-indigo-950\/10,
+[data-theme="light"] .bg-indigo-950\/20,
+[data-theme="light"] .bg-indigo-950\/25,
+[data-theme="light"] .bg-indigo-950\/30,
+[data-theme="light"] .bg-indigo-950\/40 { background-color: #EEF2FF !important; }
+
+/* ── 6. FONDOS SEMITRANSPARENTES COLOREADOS — más visibles sobre blanco ──── */
+/* Los bg-*-500/5, /8 son casi invisibles sobre fondo blanco. Los reforzamos. */
+
+[data-theme="light"] .bg-amber-500\/5,
+[data-theme="light"] .bg-amber-400\/5 { background-color: rgba(245,158,11,0.09) !important; }
+[data-theme="light"] .bg-amber-500\/8,
+[data-theme="light"] .bg-amber-400\/8 { background-color: rgba(245,158,11,0.12) !important; }
+
+[data-theme="light"] .bg-emerald-500\/5 { background-color: rgba(16,185,129,0.09) !important; }
+[data-theme="light"] .bg-emerald-500\/8 { background-color: rgba(16,185,129,0.12) !important; }
+
+[data-theme="light"] .bg-blue-500\/5 { background-color: rgba(59,130,246,0.09) !important; }
+[data-theme="light"] .bg-blue-500\/8 { background-color: rgba(59,130,246,0.12) !important; }
+
+[data-theme="light"] .bg-rose-500\/5 { background-color: rgba(244,63,94,0.09) !important; }
+[data-theme="light"] .bg-rose-500\/8 { background-color: rgba(244,63,94,0.12) !important; }
+
+[data-theme="light"] .bg-red-500\/5 { background-color: rgba(239,68,68,0.09) !important; }
+[data-theme="light"] .bg-red-500\/8 { background-color: rgba(239,68,68,0.12) !important; }
+
+[data-theme="light"] .bg-violet-500\/5 { background-color: rgba(139,92,246,0.09) !important; }
+[data-theme="light"] .bg-violet-500\/8 { background-color: rgba(139,92,246,0.12) !important; }
+
+[data-theme="light"] .bg-indigo-500\/5 { background-color: rgba(99,102,241,0.09) !important; }
+[data-theme="light"] .bg-indigo-500\/8 { background-color: rgba(99,102,241,0.12) !important; }
+
+/* ── 7. BORDES — white/opacity → gris visible ───────────────────────────── */
+
+[data-theme="light"] .border-white\/3,
 [data-theme="light"] .border-white\/4,
 [data-theme="light"] .border-white\/5,
 [data-theme="light"] .border-white\/6,
 [data-theme="light"] .border-white\/8,
-[data-theme="light"] .border-white\/10,
+[data-theme="light"] .border-white\/10 { border-color: rgba(0,0,0,0.10) !important; }
+
 [data-theme="light"] .border-white\/12,
 [data-theme="light"] .border-white\/13,
+[data-theme="light"] .border-white\/14,
 [data-theme="light"] .border-white\/15,
-[data-theme="light"] .border-white\/18 { border-color: rgba(0,0,0,0.10) !important; }
+[data-theme="light"] .border-white\/18,
+[data-theme="light"] .border-white\/20 { border-color: rgba(0,0,0,0.13) !important; }
 
-/* ── Hover states ─────────────────────────────────────────────────────────── */
+[data-theme="light"] .border-white\/25,
+[data-theme="light"] .border-white\/30,
+[data-theme="light"] .border-white\/40,
+[data-theme="light"] .border-white\/50 { border-color: rgba(0,0,0,0.18) !important; }
+
+/* ── 8. GRADIENTES — stops oscuros → pasteles claros ────────────────────── */
+
+/* from */
+[data-theme="light"] .from-amber-950,
+[data-theme="light"] .from-amber-950\/50,
+[data-theme="light"] .from-amber-950\/55 { --tw-gradient-from: #FFFBEB !important; }
+
+[data-theme="light"] .from-blue-950,
+[data-theme="light"] .from-blue-950\/55 { --tw-gradient-from: #EFF6FF !important; }
+
+[data-theme="light"] .from-violet-950,
+[data-theme="light"] .from-violet-950\/55 { --tw-gradient-from: #F5F3FF !important; }
+
+[data-theme="light"] .from-emerald-950,
+[data-theme="light"] .from-emerald-950\/55 { --tw-gradient-from: #ECFDF5 !important; }
+
+[data-theme="light"] .from-teal-950,
+[data-theme="light"] .from-teal-950\/55 { --tw-gradient-from: #F0FDFA !important; }
+
+[data-theme="light"] .from-rose-950,
+[data-theme="light"] .from-rose-950\/55,
+[data-theme="light"] .from-red-950,
+[data-theme="light"] .from-red-950\/55 { --tw-gradient-from: #FFF1F2 !important; }
+
+[data-theme="light"] .from-indigo-950,
+[data-theme="light"] .from-indigo-950\/55 { --tw-gradient-from: #EEF2FF !important; }
+
+/* to — los extremos oscuros del gradiente hero */
+[data-theme="light"] .to-\[\#1E1E28\],
+[data-theme="light"] .to-\[\#1e1e28\],
+[data-theme="light"] .to-\[\#09090E\],
+[data-theme="light"] .to-\[\#0A0A0F\],
+[data-theme="light"] .to-\[\#111118\],
+[data-theme="light"] .to-\[\#18181F\] { --tw-gradient-to: #FFFFFF !important; }
+
+/* ── 9. HOVER STATES ─────────────────────────────────────────────────────── */
+
+[data-theme="light"] .hover\:bg-white\/2:hover,
+[data-theme="light"] .hover\:bg-white\/3:hover,
+[data-theme="light"] .hover\:bg-white\/4:hover,
 [data-theme="light"] .hover\:bg-white\/5:hover,
 [data-theme="light"] .hover\:bg-white\/6:hover,
-[data-theme="light"] .hover\:bg-white\/8:hover { background-color: rgba(0,0,0,0.05) !important; }
+[data-theme="light"] .hover\:bg-white\/8:hover,
+[data-theme="light"] .hover\:bg-white\/10:hover { background-color: rgba(0,0,0,0.05) !important; }
 
-/* ── Blue accent: stays readable ─────────────────────────────────────────── */
-[data-theme="light"] .text-blue-400 { color: #1D4ED8 !important; }
-[data-theme="light"] .text-blue-300 { color: #2563EB !important; }
+[data-theme="light"] .hover\:text-white:hover,
+[data-theme="light"] .hover\:text-white\/85:hover,
+[data-theme="light"] .hover\:text-white\/80:hover { color: #1C1C1E !important; }
 
-[data-theme="light"] .bg-blue-600,
-[data-theme="light"] .bg-blue-500 {
-  background-color: #1D4ED8 !important;
-  color: #FFFFFF !important;
-}
+[data-theme="light"] .hover\:text-white\/60:hover,
+[data-theme="light"] .hover\:text-white\/55:hover { color: #3A3A3C !important; }
 
-/* ── Gradients: dark → light ─────────────────────────────────────────────── */
-[data-theme="light"] .from-blue-950,
-[data-theme="light"] .from-violet-950 { --tw-gradient-from: #EEF2FF !important; }
+/* ── 10. BUTTONS — accent colors correctos ───────────────────────────────── */
 
-/* ── Labels uppercase ─────────────────────────────────────────────────────── */
-[data-theme="light"] .uppercase.tracking-wide,
+[data-theme="light"] .bg-blue-600 { background-color: #1D4ED8 !important; color: #FFFFFF !important; }
+[data-theme="light"] .bg-blue-500 { background-color: #2563EB !important; color: #FFFFFF !important; }
+[data-theme="light"] .hover\:bg-blue-500:hover { background-color: #2563EB !important; }
+[data-theme="light"] .hover\:bg-blue-600:hover { background-color: #1D4ED8 !important; }
+
+[data-theme="light"] .bg-rose-600 { background-color: #E11D48 !important; color: #FFFFFF !important; }
+[data-theme="light"] .hover\:bg-rose-500:hover { background-color: #F43F5E !important; color: #FFFFFF !important; }
+
+[data-theme="light"] .bg-emerald-600 { background-color: #059669 !important; color: #FFFFFF !important; }
+[data-theme="light"] .bg-indigo-600  { background-color: #4F46E5 !important; color: #FFFFFF !important; }
+[data-theme="light"] .hover\:bg-indigo-500:hover { background-color: #6366F1 !important; color: #FFFFFF !important; }
+
+/* ── 11. ETIQUETAS UPPERCASE (section headers) ───────────────────────────── */
+/* Solo cuando van en combinación uppercase + tracking — son los labels de sección */
+[data-theme="light"] .uppercase.tracking-widest,
 [data-theme="light"] .uppercase.tracking-wider,
-[data-theme="light"] .uppercase.tracking-widest { color: #6C6C70 !important; }
+[data-theme="light"] .uppercase.tracking-wide { color: #6C6C70 !important; }
 
-/* ── Inputs / Selects ─────────────────────────────────────────────────────── */
-[data-theme="light"] input,
+/* ── 12. INPUTS / SELECTS / TEXTAREAS ────────────────────────────────────── */
+
+[data-theme="light"] input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
 [data-theme="light"] textarea,
 [data-theme="light"] select {
   background-color: #FFFFFF !important;
-  border-color: rgba(0,0,0,0.15) !important;
+  border-color: rgba(0,0,0,0.18) !important;
   color: #1C1C1E !important;
 }
+
 [data-theme="light"] input::placeholder,
 [data-theme="light"] textarea::placeholder { color: #AEAEB2 !important; }
+
+[data-theme="light"] input:focus:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+[data-theme="light"] textarea:focus,
+[data-theme="light"] select:focus {
+  border-color: rgba(29,78,216,0.45) !important;
+  box-shadow: 0 0 0 3px rgba(29,78,216,0.10) !important;
+  outline: none;
+}
+
 [data-theme="light"] option { background-color: #FFFFFF; color: #1C1C1E; }
 
-/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+/* ── 13. LAYOUT — sidebar, topbar, mobile nav ────────────────────────────── */
+
 [data-theme="light"] aside {
   background-color: #ECEAE6 !important;
   border-right-color: rgba(0,0,0,0.08) !important;
 }
 
-/* ── Topbar ──────────────────────────────────────────────────────────────── */
 [data-theme="light"] header.fixed {
-  background-color: rgba(245,244,240,0.90) !important;
+  background-color: rgba(245,244,240,0.92) !important;
   border-bottom-color: rgba(0,0,0,0.08) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
 }
 
-/* ── Mobile nav ──────────────────────────────────────────────────────────── */
 [data-theme="light"] nav.fixed.bottom-0 {
-  background-color: rgba(236,234,230,0.95) !important;
+  background-color: rgba(245,244,240,0.96) !important;
   border-top-color: rgba(0,0,0,0.08) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
 }
 
-/* ── Scrollbar ───────────────────────────────────────────────────────────── */
-[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
+/* ── 14. SCROLLBAR ───────────────────────────────────────────────────────── */
+
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.14); border-radius: 4px; }
+[data-theme="light"] ::-webkit-scrollbar-track { background: transparent; }
+
+/* ── 15. SPINNER / LOADER (border-t-*) ────────────────────────────────────── */
+
+[data-theme="light"] .border-t-transparent { border-top-color: transparent !important; }
