@@ -201,7 +201,8 @@ function parseFinancialAnalysis(text: string) {
     .trim()
 
   const getSection = (label: string) => {
-    const regex = new RegExp(label + ':?\\s*([\\s\\S]*?)(?=\\n[A-ZÁÉÍÓÚ]{3,}:|$)', 'i')
+    // Lookahead stops at any ALL-CAPS section header (with or without spaces/accents)
+    const regex = new RegExp(label + ':?\\s*([\\s\\S]*?)(?=\\n[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\\s]{2,}:|$)', 'i')
     const match = clean.match(regex)
     return match ? match[1].trim() : null
   }
@@ -517,7 +518,10 @@ PROYECCIÓN: [estimación del patrimonio en 5 y 10 años]
 
 Escribe frases COMPLETAS. Máximo 400 palabras en total.`
 
-      const raw    = await callAI(prompt, undefined, true, 1200)
+      const raw    = await callAI(prompt, undefined, true, 2000)
+      console.log('ANÁLISIS COMPLETO LENGTH:', raw.length)
+      console.log('ANÁLISIS PRIMEROS 500 CHARS:', raw.substring(0, 500))
+      console.log('ANÁLISIS ÚLTIMOS 200 CHARS:', raw.slice(-200))
       const clean  = raw.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim()
       const parsed = parseFinancialAnalysis(clean)
 
