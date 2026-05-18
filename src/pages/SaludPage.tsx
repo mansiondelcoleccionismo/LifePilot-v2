@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { PageHeader } from '@/components/layout/PageContainer'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Smartphone } from 'lucide-react'
 import {
   type HealthData,
   getHealthData,
@@ -11,6 +11,7 @@ import {
 } from '@/services/health.service'
 import { patchContext } from '@/services/context.service'
 import { notifyOnce } from '@/services/notification.service'
+import { usePasos } from '@/hooks/usePasos'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -25,9 +26,9 @@ const QUALITY_OPTIONS: { value: SleepQuality; label: string; emoji: string }[] =
 
 const STEPS_GOAL = 10_000
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Color helpers ─────────────────────────────────────────────────────────────
 
-function stepsBarColor(steps?: number) {
+function stepsBarColor(steps?: number | null) {
   if (!steps) return 'bg-white/8'
   if (steps >= STEPS_GOAL) return 'bg-emerald-500'
   if (steps >= 7000)       return 'bg-blue-500'
@@ -35,44 +36,56 @@ function stepsBarColor(steps?: number) {
   return 'bg-rose-500'
 }
 
-function stepsTextColor(steps?: number) {
+function stepsTextColor(steps?: number | null) {
   if (!steps) return 'text-white/25'
   if (steps >= STEPS_GOAL) return 'text-emerald-400'
   if (steps >= 7000)       return 'text-blue-400'
   if (steps >= 4000)       return 'text-amber-400'
-  return 'text-red-400'
+  return 'text-rose-400'
 }
 
 // ── SVG Charts ────────────────────────────────────────────────────────────────
 
-function StepsBarChart({ days }: {
-  days: Array<{ label: string; steps?: number }>
-}) {
-  const W = 280, H = 84, PB = 20
-  const plotH = H - PB
-  const n     = days.length
+function StepsBarChart({ days }: { days: Array<{ label: string; steps?: number | null }> }) {
+  const W = 280, H = 90, PB = 22
+  const plotH  = H - PB
+  const n      = days.length
   const maxVal = Math.max(STEPS_GOAL, ...days.map(d => d.steps ?? 0))
   const slotW  = W / n
-  const barW   = Math.floor(slotW * 0.62)
+  const barW   = Math.floor(slotW * 0.58)
   const goalY  = plotH * (1 - STEPS_GOAL / maxVal)
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
+      {/* Goal line */}
       <line x1={0} x2={W} y1={goalY} y2={goalY}
-        stroke="#ffffff10" strokeWidth={1} strokeDasharray="3,2" />
+        stroke="#ffffff12" strokeWidth={1} strokeDasharray="3,3" />
+      <text x={W - 2} y={goalY - 3} textAnchor="end"
+        fill="#ffffff20" fontSize={7} fontFamily="sans-serif">10k</text>
+
       {days.map((d, i) => {
-        const barH = d.steps ? Math.max(3, (d.steps / maxVal) * plotH) : 3
+        const barH = d.steps ? Math.max(4, (d.steps / maxVal) * plotH) : 4
         const x    = slotW * i + (slotW - barW) / 2
-        const fill = !d.steps    ? '#ffffff0c'
+        const fill = !d.steps
+          ? '#ffffff08'
           : d.steps >= STEPS_GOAL ? '#10b981'
           : d.steps >= 7000       ? '#3b82f6'
           : d.steps >= 4000       ? '#f59e0b'
           : '#ef4444'
+        const isToday = i === n - 1
         return (
           <g key={i}>
-            <rect x={x} y={plotH - barH} width={barW} height={barH} rx={2} fill={fill} opacity={0.85} />
-            <text x={slotW * i + slotW / 2} y={H - 4}
-              textAnchor="middle" fill="#ffffff30" fontSize={8} fontFamily="sans-serif">
+            <rect x={x} y={plotH - barH} width={barW} height={barH}
+              rx={3} fill={fill} opacity={isToday ? 1 : 0.7} />
+            {isToday && d.steps && (
+              <text x={slotW * i + slotW / 2} y={plotH - barH - 4}
+                textAnchor="middle" fill={fill} fontSize={7} fontFamily="sans-serif" fontWeight="600">
+                {d.steps >= 1000 ? `${(d.steps / 1000).toFixed(1)}k` : d.steps}
+              </text>
+            )}
+            <text x={slotW * i + slotW / 2} y={H - 5}
+              textAnchor="middle" fill={isToday ? '#ffffff60' : '#ffffff25'}
+              fontSize={8} fontFamily="sans-serif" fontWeight={isToday ? '600' : '400'}>
               {d.label}
             </text>
           </g>
@@ -82,9 +95,7 @@ function StepsBarChart({ days }: {
   )
 }
 
-function SleepLineChart({ days }: {
-  days: Array<{ label: string; sleepH?: number }>
-}) {
+function SleepLineChart({ days }: { days: Array<{ label: string; sleepH?: number }> }) {
   const W = 280, H = 84, PB = 20
   const plotH = H - PB
   const maxH  = 10
@@ -128,14 +139,51 @@ function SleepLineChart({ days }: {
   )
 }
 
+// ── Ring progress ─────────────────────────────────────────────────────────────
+
+function StepsRing({ steps, goal }: { steps: number | null; goal: number }) {
+  const pct  = steps ? Math.min(1, steps / goal) : 0
+  const R    = 42
+  const circ = 2 * Math.PI * R
+  const dash = circ * pct
+
+  const color = !steps ? '#ffffff15'
+    : steps >= goal ? '#10b981'
+    : steps >= 7000 ? '#3b82f6'
+    : steps >= 4000 ? '#f59e0b'
+    : '#ef4444'
+
+  return (
+    <svg width={100} height={100} viewBox="0 0 100 100" className="shrink-0">
+      <circle cx={50} cy={50} r={R} fill="none" stroke="#ffffff0c" strokeWidth={8} />
+      <circle cx={50} cy={50} r={R} fill="none" stroke={color} strokeWidth={8}
+        strokeDasharray={`${dash} ${circ - dash}`}
+        strokeDashoffset={circ / 4}
+        strokeLinecap="round"
+        style={{ transition: 'stroke-dasharray 1s ease' }}
+      />
+      <text x={50} y={47} textAnchor="middle" fill={color}
+        fontSize={14} fontWeight="700" fontFamily="sans-serif">
+        {steps ? (steps >= 1000 ? `${(steps / 1000).toFixed(1)}k` : steps) : '—'}
+      </text>
+      <text x={50} y={60} textAnchor="middle" fill="#ffffff30"
+        fontSize={8} fontFamily="sans-serif">pasos</text>
+    </svg>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function SaludPage() {
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
+  // Manual health data
   const [todayData, setTodayData] = useState<HealthData | null>(null)
-  const [weekData, setWeekData]   = useState<HealthData[]>([])
-  const [loading, setLoading]     = useState(true)
+  const [weekData,  setWeekData]  = useState<HealthData[]>([])
+  const [loading,   setLoading]   = useState(true)
+
+  // Apple Health steps (real-time via Shortcuts)
+  const { pasosHoy, historicoSemanal, loading: pasosLoading } = usePasos()
 
   // Form state
   const [formSteps,   setFormSteps]   = useState('')
@@ -144,43 +192,34 @@ export function SaludPage() {
   const [formQuality, setFormQuality] = useState<SleepQuality>('buena')
   const [formWeight,  setFormWeight]  = useState('')
   const [formHR,      setFormHR]      = useState('')
-  const [saving,  setSaving]  = useState(false)
-  const [saveMsg, setSaveMsg] = useState<string | null>(null)
+  const [saving,      setSaving]      = useState(false)
+  const [saveMsg,     setSaveMsg]     = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
       setLoading(true)
       try {
-        const [today, week] = await Promise.all([
-          getHealthData(todayStr),
-          getLastNDays(7),
-        ])
+        const [today, week] = await Promise.all([getHealthData(todayStr), getLastNDays(7)])
         setTodayData(today)
         setWeekData(week)
 
-        // Pre-fill form with today's data
         if (today) {
-          if (today.steps       !== undefined) setFormSteps(String(today.steps))
-          if (today.sleepHours  !== undefined) setFormSleepH(String(today.sleepHours))
+          if (today.steps        !== undefined) setFormSteps(String(today.steps))
+          if (today.sleepHours   !== undefined) setFormSleepH(String(today.sleepHours))
           if (today.sleepMinutes !== undefined) setFormSleepM(String(today.sleepMinutes))
-          if (today.sleepQuality)              setFormQuality(today.sleepQuality)
-          if (today.weight      !== undefined) setFormWeight(String(today.weight))
+          if (today.sleepQuality)               setFormQuality(today.sleepQuality)
+          if (today.weight       !== undefined) setFormWeight(String(today.weight))
           if (today.heartRateAvg !== undefined) setFormHR(String(today.heartRateAvg))
         }
 
-        // Patch AI context
         const withSteps = week.filter(d => d.steps !== undefined)
         const withSleep = week.filter(d => d.sleepHours !== undefined)
         patchContext({
-          ...(today?.steps       !== undefined ? { todaySteps: today.steps }                : {}),
-          ...(today?.sleepHours  !== undefined ? { todaySleepHours: calcSleepTotal(today) } : {}),
-          ...(today?.sleepQuality              ? { todaySleepQuality: today.sleepQuality }  : {}),
-          ...(withSteps.length ? {
-            weekStepsAvg: Math.round(withSteps.reduce((s, d) => s + (d.steps ?? 0), 0) / withSteps.length),
-          } : {}),
-          ...(withSleep.length ? {
-            weekSleepAvg: parseFloat((withSleep.reduce((s, d) => s + calcSleepTotal(d), 0) / withSleep.length).toFixed(1)),
-          } : {}),
+          ...(today?.steps      !== undefined ? { todaySteps: today.steps }               : {}),
+          ...(today?.sleepHours !== undefined ? { todaySleepHours: calcSleepTotal(today) } : {}),
+          ...(today?.sleepQuality             ? { todaySleepQuality: today.sleepQuality }  : {}),
+          ...(withSteps.length ? { weekStepsAvg: Math.round(withSteps.reduce((s, d) => s + (d.steps ?? 0), 0) / withSteps.length) } : {}),
+          ...(withSleep.length ? { weekSleepAvg: parseFloat((withSleep.reduce((s, d) => s + calcSleepTotal(d), 0) / withSleep.length).toFixed(1)) } : {}),
         })
       } finally {
         setLoading(false)
@@ -189,17 +228,29 @@ export function SaludPage() {
     load()
   }, [todayStr])
 
-  // Build complete 7-day array for charts (fills missing days with undefined)
-  const last7 = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date()
-      d.setDate(d.getDate() - (6 - i))
-      const date  = d.toISOString().slice(0, 10)
-      const label = d.toLocaleDateString('es-ES', { weekday: 'short' }).slice(0, 3)
-      const entry = weekData.find(w => w.date === date)
-      return { date, label, steps: entry?.steps, sleepH: entry ? calcSleepTotal(entry) : undefined }
-    })
-  }, [weekData])
+  // 7-day arrays for charts
+  const last7 = useMemo(() => Array.from({ length: 7 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (6 - i))
+    const date  = d.toISOString().slice(0, 10)
+    const label = d.toLocaleDateString('es-ES', { weekday: 'short' }).slice(0, 3)
+    const entry = weekData.find(w => w.date === date)
+    return { date, label, steps: entry?.steps, sleepH: entry ? calcSleepTotal(entry) : undefined }
+  }), [weekData])
+
+  // Apple Health chart data — 7-day grid
+  const appleChartDays = useMemo(() => Array.from({ length: 7 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (6 - i))
+    const fecha = d.toISOString().slice(0, 10)
+    const label = d.toLocaleDateString('es-ES', { weekday: 'short' }).slice(0, 3)
+    return { label, steps: historicoSemanal.find(h => h.fecha === fecha)?.pasos ?? null }
+  }), [historicoSemanal])
+
+  const appleWeekAvg = useMemo(() => {
+    const valid = historicoSemanal.filter(d => d.pasos > 0)
+    return valid.length ? Math.round(valid.reduce((s, d) => s + d.pasos, 0) / valid.length) : null
+  }, [historicoSemanal])
 
   const weekStepsAvg = useMemo(() => {
     const v = last7.filter(d => d.steps !== undefined)
@@ -215,11 +266,11 @@ export function SaludPage() {
   const todayStepsPct = todayData?.steps ? Math.min(100, (todayData.steps / STEPS_GOAL) * 100) : 0
 
   async function handleSave() {
-    const steps  = formSteps  ? parseInt(formSteps)                    : undefined
-    const sleepH = formSleepH ? parseInt(formSleepH)                   : undefined
-    const sleepM = formSleepM ? parseInt(formSleepM)                   : undefined
+    const steps  = formSteps  ? parseInt(formSteps)                     : undefined
+    const sleepH = formSleepH ? parseInt(formSleepH)                    : undefined
+    const sleepM = formSleepM ? parseInt(formSleepM)                    : undefined
     const weight = formWeight ? parseFloat(formWeight.replace(',', '.')) : undefined
-    const hr     = formHR     ? parseInt(formHR)                       : undefined
+    const hr     = formHR     ? parseInt(formHR)                        : undefined
 
     if (steps === undefined && sleepH === undefined && weight === undefined) {
       setSaveMsg('Introduce al menos un dato.')
@@ -229,13 +280,13 @@ export function SaludPage() {
     setSaving(true)
     try {
       await saveHealthData({
-        date:         todayStr,
-        ...(steps   !== undefined ? { steps }                 : {}),
-        ...(sleepH  !== undefined ? { sleepHours: sleepH }   : {}),
-        ...(sleepM  !== undefined ? { sleepMinutes: sleepM } : {}),
+        date: todayStr,
+        ...(steps  !== undefined ? { steps }                 : {}),
+        ...(sleepH !== undefined ? { sleepHours: sleepH }   : {}),
+        ...(sleepM !== undefined ? { sleepMinutes: sleepM } : {}),
         sleepQuality: formQuality,
-        ...(weight  !== undefined ? { weight }                : {}),
-        ...(hr      !== undefined ? { heartRateAvg: hr }     : {}),
+        ...(weight !== undefined ? { weight }                : {}),
+        ...(hr     !== undefined ? { heartRateAvg: hr }     : {}),
         source:    'manual',
         createdAt: new Date(),
       })
@@ -262,7 +313,7 @@ export function SaludPage() {
     return (
       <div className="px-4 py-6 md:px-6 lg:px-8 max-w-5xl mx-auto space-y-4 animate-pulse">
         <div className="h-8 bg-white/10 rounded-lg w-32" />
-        <div className="h-36 bg-white/5 rounded-2xl" />
+        <div className="h-40 bg-white/5 rounded-2xl" />
         <div className="h-56 bg-white/5 rounded-2xl" />
         <div className="h-52 bg-white/5 rounded-2xl" />
       </div>
@@ -270,29 +321,112 @@ export function SaludPage() {
   }
 
   return (
-    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-5xl mx-auto space-y-5">
+    <div className="px-4 py-6 md:px-6 lg:px-8 max-w-5xl mx-auto space-y-5 pb-28">
       <PageHeader title="❤️ Salud" subtitle="Seguimiento diario de bienestar" />
 
-      {/* ── Hoy ──────────────────────────────────────────────────────────── */}
+      {/* ── Actividad — Apple Health (tiempo real) ──────────────────────── */}
       <motion.div
-        initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
-        className="rounded-2xl bg-[#1E1E28] border border-white/8 p-5 space-y-4"
+        initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28 }}
+        className="rounded-2xl bg-[#1E1E28] border border-white/8 p-5 space-y-5"
       >
-        <p className="text-[10px] font-semibold tracking-widest uppercase text-white/25">Hoy</p>
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-semibold tracking-widest uppercase text-white/25">Actividad</p>
+          <div className="flex items-center gap-1.5 text-[10px] text-white/20">
+            <Smartphone size={10} />
+            <span>Apple Health</span>
+          </div>
+        </div>
 
-        {!todayData ? (
-          <p className="text-sm text-white/30 py-2">Sin datos para hoy. Usa el formulario para añadirlos.</p>
+        {pasosLoading ? (
+          <div className="flex items-center gap-4">
+            <div className="w-24 h-24 rounded-full bg-white/5 animate-pulse shrink-0" />
+            <div className="flex-1 space-y-3">
+              <div className="h-4 bg-white/5 rounded-lg animate-pulse" />
+              <div className="h-3 bg-white/5 rounded-lg animate-pulse w-2/3" />
+            </div>
+          </div>
         ) : (
+          <>
+            {/* Ring + stats */}
+            <div className="flex items-center gap-5">
+              <StepsRing steps={pasosHoy} goal={STEPS_GOAL} />
+
+              <div className="flex-1 space-y-3 min-w-0">
+                {pasosHoy !== null ? (
+                  <>
+                    <div>
+                      <p className={`text-3xl font-bold tabular-nums tracking-tight ${stepsTextColor(pasosHoy)}`}>
+                        {pasosHoy.toLocaleString('es-ES')}
+                      </p>
+                      <p className="text-xs text-white/35 mt-0.5">pasos hoy</p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="h-1.5 rounded-full bg-white/6 overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min(100, (pasosHoy / STEPS_GOAL) * 100)}%` }}
+                          transition={{ duration: 0.9, ease: 'easeOut' }}
+                          className={`h-full rounded-full ${stepsBarColor(pasosHoy)}`}
+                        />
+                      </div>
+                      <p className="text-[10px] text-white/30">
+                        {pasosHoy >= STEPS_GOAL
+                          ? `✓ Objetivo superado · +${(pasosHoy - STEPS_GOAL).toLocaleString('es-ES')} pasos`
+                          : `Faltan ${(STEPS_GOAL - pasosHoy).toLocaleString('es-ES')} pasos`}
+                      </p>
+                    </div>
+
+                    {appleWeekAvg !== null && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-white/25">Prom. 7 días:</span>
+                        <span className={`text-[10px] font-semibold ${stepsTextColor(appleWeekAvg)}`}>
+                          {appleWeekAvg.toLocaleString('es-ES')}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="space-y-1.5">
+                    <p className="text-sm text-white/40">Sin datos de hoy</p>
+                    <p className="text-xs text-white/25 leading-relaxed">
+                      Activa el Shortcut en el iPhone para sincronizar pasos automáticamente.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Mini chart */}
+            {appleChartDays.some(d => d.steps !== null) && (
+              <div>
+                <p className="text-[10px] text-white/25 mb-3">Últimos 7 días · objetivo 10.000</p>
+                <StepsBarChart days={appleChartDays} />
+              </div>
+            )}
+          </>
+        )}
+      </motion.div>
+
+      {/* ── Hoy (datos manuales) ─────────────────────────────────────────── */}
+      {todayData && (
+        <motion.div
+          initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.07, duration: 0.28 }}
+          className="rounded-2xl bg-[#1E1E28] border border-white/8 p-5 space-y-4"
+        >
+          <p className="text-[10px] font-semibold tracking-widest uppercase text-white/25">Hoy</p>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {todayData.steps !== undefined && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-white/45">👟 Pasos</span>
-                  <span className={`text-2xl font-bold tabular-nums ${stepsTextColor(todayData.steps)}`}>
+                  <span className="text-xs text-white/45">👟 Pasos (manual)</span>
+                  <span className={`text-xl font-bold tabular-nums ${stepsTextColor(todayData.steps)}`}>
                     {todayData.steps.toLocaleString('es-ES')}
                   </span>
                 </div>
-                <div className="h-2 rounded-full bg-white/6 overflow-hidden">
+                <div className="h-1.5 rounded-full bg-white/6 overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${todayStepsPct}%` }}
@@ -300,11 +434,6 @@ export function SaludPage() {
                     className={`h-full rounded-full ${stepsBarColor(todayData.steps)}`}
                   />
                 </div>
-                <p className="text-[10px] text-white/25 text-right">
-                  {todayData.steps >= STEPS_GOAL
-                    ? '✓ Objetivo alcanzado'
-                    : `${(STEPS_GOAL - todayData.steps).toLocaleString('es-ES')} pasos para el objetivo`}
-                </p>
               </div>
             )}
 
@@ -312,7 +441,7 @@ export function SaludPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-white/45">🌙 Sueño</span>
-                  <span className="text-2xl font-bold tabular-nums text-indigo-300">
+                  <span className="text-xl font-bold tabular-nums text-indigo-300">
                     {todayData.sleepHours}h{todayData.sleepMinutes ? ` ${todayData.sleepMinutes}m` : ''}
                   </span>
                 </div>
@@ -322,7 +451,7 @@ export function SaludPage() {
                     Calidad: <span className="capitalize text-white/60">{todayData.sleepQuality}</span>
                   </p>
                 )}
-                <div className="h-2 rounded-full bg-white/6 overflow-hidden">
+                <div className="h-1.5 rounded-full bg-white/6 overflow-hidden">
                   <div
                     className="h-full rounded-full bg-indigo-500 transition-all duration-700"
                     style={{ width: `${Math.min(100, (todaySleepH / 8) * 100)}%` }}
@@ -345,50 +474,46 @@ export function SaludPage() {
               </div>
             )}
           </div>
-        )}
-      </motion.div>
+        </motion.div>
+      )}
 
       {/* ── Esta semana ───────────────────────────────────────────────────── */}
-      <motion.div
-        initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.07, duration: 0.28 }}
-        className="rounded-2xl bg-[#1E1E28] border border-white/8 p-5 space-y-5"
-      >
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <p className="text-[10px] font-semibold tracking-widest uppercase text-white/25">Esta semana</p>
-          <div className="flex gap-4 text-[10px] text-white/30">
-            {weekStepsAvg !== undefined && (
-              <span>Pasos prom: <span className="text-white/55 font-medium">{weekStepsAvg.toLocaleString('es-ES')}</span></span>
-            )}
-            {weekSleepAvg !== undefined && (
-              <span>Sueño prom: <span className="text-white/55 font-medium">{weekSleepAvg}h</span></span>
-            )}
+      {(last7.some(d => d.steps !== undefined) || last7.some(d => d.sleepH !== undefined)) && (
+        <motion.div
+          initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.28 }}
+          className="rounded-2xl bg-[#1E1E28] border border-white/8 p-5 space-y-5"
+        >
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-[10px] font-semibold tracking-widest uppercase text-white/25">Esta semana · registro manual</p>
+            <div className="flex gap-4 text-[10px] text-white/30">
+              {weekStepsAvg !== undefined && (
+                <span>Pasos prom: <span className="text-white/55 font-medium">{weekStepsAvg.toLocaleString('es-ES')}</span></span>
+              )}
+              {weekSleepAvg !== undefined && (
+                <span>Sueño prom: <span className="text-white/55 font-medium">{weekSleepAvg}h</span></span>
+              )}
+            </div>
           </div>
-        </div>
 
-        {last7.some(d => d.steps !== undefined) ? (
-          <div>
-            <p className="text-[10px] text-white/25 mb-3">👟 Pasos · objetivo {STEPS_GOAL.toLocaleString('es-ES')}</p>
-            <StepsBarChart days={last7} />
-          </div>
-        ) : (
-          <p className="text-xs text-white/25">Sin datos de pasos esta semana</p>
-        )}
+          {last7.some(d => d.steps !== undefined) && (
+            <div>
+              <p className="text-[10px] text-white/25 mb-3">👟 Pasos · objetivo {STEPS_GOAL.toLocaleString('es-ES')}</p>
+              <StepsBarChart days={last7} />
+            </div>
+          )}
 
-        {last7.some(d => d.sleepH !== undefined) && (
-          <div>
-            <p className="text-[10px] text-white/25 mb-3">🌙 Horas de sueño · objetivo 8h</p>
-            <SleepLineChart days={last7} />
-          </div>
-        )}
-
-        {!last7.some(d => d.steps !== undefined) && !last7.some(d => d.sleepH !== undefined) && (
-          <p className="text-xs text-white/25 py-2">Sin datos esta semana. Empieza registrando el día de hoy.</p>
-        )}
-      </motion.div>
+          {last7.some(d => d.sleepH !== undefined) && (
+            <div>
+              <p className="text-[10px] text-white/25 mb-3">🌙 Horas de sueño · objetivo 8h</p>
+              <SleepLineChart days={last7} />
+            </div>
+          )}
+        </motion.div>
+      )}
 
       {/* ── Registro manual ───────────────────────────────────────────────── */}
       <motion.div
-        initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14, duration: 0.28 }}
+        initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.17, duration: 0.28 }}
         className="rounded-2xl bg-[#1E1E28] border border-white/8 p-5 space-y-4"
       >
         <p className="text-[10px] font-semibold tracking-widest uppercase text-white/25">
@@ -400,8 +525,7 @@ export function SaludPage() {
             <span className="text-xs text-white/45">👟 Pasos</span>
             <input
               type="number" inputMode="numeric" placeholder="Ej: 8500"
-              value={formSteps}
-              onChange={e => setFormSteps(e.target.value)}
+              value={formSteps} onChange={e => setFormSteps(e.target.value)}
               className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/25 transition"
             />
           </label>
@@ -410,8 +534,7 @@ export function SaludPage() {
             <span className="text-xs text-white/45">⚖️ Peso (kg)</span>
             <input
               type="number" inputMode="decimal" step="0.1" placeholder="Ej: 82.5"
-              value={formWeight}
-              onChange={e => setFormWeight(e.target.value)}
+              value={formWeight} onChange={e => setFormWeight(e.target.value)}
               className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/25 transition"
             />
           </label>
@@ -421,14 +544,12 @@ export function SaludPage() {
             <div className="flex gap-2">
               <input
                 type="number" inputMode="numeric" placeholder="Horas" min={0} max={16}
-                value={formSleepH}
-                onChange={e => setFormSleepH(e.target.value)}
+                value={formSleepH} onChange={e => setFormSleepH(e.target.value)}
                 className="flex-1 rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/25 transition"
               />
               <input
                 type="number" inputMode="numeric" placeholder="Min" min={0} max={59}
-                value={formSleepM}
-                onChange={e => setFormSleepM(e.target.value)}
+                value={formSleepM} onChange={e => setFormSleepM(e.target.value)}
                 className="w-20 rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/25 transition"
               />
             </div>
@@ -438,8 +559,7 @@ export function SaludPage() {
             <span className="text-xs text-white/45">❤️ FC promedio (bpm)</span>
             <input
               type="number" inputMode="numeric" placeholder="Ej: 62"
-              value={formHR}
-              onChange={e => setFormHR(e.target.value)}
+              value={formHR} onChange={e => setFormHR(e.target.value)}
               className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/25 transition"
             />
           </label>
@@ -449,15 +569,12 @@ export function SaludPage() {
           <span className="text-xs text-white/45">Calidad del sueño</span>
           <div className="flex gap-2">
             {QUALITY_OPTIONS.map(q => (
-              <button
-                key={q.value}
-                onClick={() => setFormQuality(q.value)}
+              <button key={q.value} onClick={() => setFormQuality(q.value)}
                 className={`flex-1 rounded-xl py-2 text-xs font-medium transition border ${
                   formQuality === q.value
                     ? 'bg-white/10 border-white/20 text-white/80'
                     : 'bg-white/3 border-white/8 text-white/35 hover:bg-white/5'
-                }`}
-              >
+                }`}>
                 {q.emoji} {q.label}
               </button>
             ))}
@@ -465,11 +582,8 @@ export function SaludPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-sm font-semibold text-white transition"
-          >
+          <button onClick={handleSave} disabled={saving}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-sm font-semibold text-white transition">
             {saving && <Loader2 size={13} className="animate-spin" />}
             Guardar
           </button>
@@ -481,8 +595,8 @@ export function SaludPage() {
         </div>
 
         <p className="text-[10px] text-white/20 leading-relaxed">
-          También puedes enviar datos automáticamente desde Atajos de iOS escribiendo directamente
-          en la colección Firebase &quot;health_data&quot; con doc ID = fecha YYYY-MM-DD.
+          Los pasos de arriba se sincronizan automáticamente desde Apple Health via Shortcuts.
+          Usa este formulario para sueño, peso y frecuencia cardíaca.
         </p>
       </motion.div>
     </div>
