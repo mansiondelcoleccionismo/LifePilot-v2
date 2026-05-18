@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Apple Health — iPhone Shortcuts escribe pasos sin autenticación
+    // Acepta solo los campos permitidos para evitar escrituras arbitrarias
+    match /usuarios/{userId}/pasos/{fecha} {
+      allow read: if true;
+      allow write: if request.auth == null
+        && request.resource.data.keys().hasOnly(['fecha', 'pasos', 'fuente'])
+        && request.resource.data.pasos is int
+        && request.resource.data.pasos >= 0;
+    }
+
+    // App personal — sin Firebase Auth, se permite todo lo demás
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

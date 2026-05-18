@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PageHeader } from '@/components/layout/PageContainer'
 import { Pill, Plus, Check, Edit, Trash2, X } from 'lucide-react'
@@ -12,6 +12,7 @@ import {
   deleteMedication,
 } from '@/services/medication.service'
 import type { Medication, MedicationLog, MedicationTime, MedicationUnit } from '@/types/medication'
+import { notifyOnce } from '@/services/notification.service'
 
 const TIME_CFG: Record<MedicationTime, { label: string; color: string; bg: string; border: string; icon: string }> = {
   mañana:   { label: 'Mañana',   color: 'text-blue-400',   bg: 'bg-blue-500/15',   border: 'border-blue-500/25',   icon: '☀️' },
@@ -94,6 +95,18 @@ export function MedicacionPage() {
     () => medications.filter((m) => todayLogs[m.id]?.taken).length,
     [medications, todayLogs],
   )
+
+  const prevTakenRef = useRef(0)
+  useEffect(() => {
+    if (medications.length > 0 && takenToday === medications.length && prevTakenRef.current < medications.length) {
+      notifyOnce('all_meds_taken', {
+        title: '💊 Medicación completa',
+        body: 'Has tomado todos tus medicamentos de hoy. ¡Bien hecho!',
+        type: 'achievement',
+      })
+    }
+    prevTakenRef.current = takenToday
+  }, [takenToday, medications.length])
 
   function openAdd() {
     setEditingMed(null)

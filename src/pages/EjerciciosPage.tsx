@@ -9,6 +9,7 @@ import {
 import { collection, doc, getDoc, getDocs, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { callAI, hasAnyAIKey } from '@/services/ai.service'
+import { notifyOnce } from '@/services/notification.service'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ExerciseDef {
@@ -1052,6 +1053,11 @@ export function EjerciciosPage() {
     if (!allDone) return
 
     setShowDone(true)
+    notifyOnce('workout_complete', {
+      title: '💪 Entrenamiento completado',
+      body: `${dayProgram.day}${dayProgram.focus ? ` · ${dayProgram.focus}` : ''} — ¡Buen trabajo!`,
+      type: 'achievement',
+    })
     const exercises = dayProgram.exercises.map((ex) => {
       const s = setsLog[ex.id] ?? []
       return { id: ex.id, name: ex.name, setsCompleted: s.filter((x) => x.done).length, weight: weights[ex.id] ?? 0 }

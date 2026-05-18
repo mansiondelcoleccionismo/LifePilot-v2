@@ -8,11 +8,18 @@ import { Sidebar, SidebarContent } from './Sidebar'
 import { Topbar } from './Topbar'
 import { MobileNav } from './MobileNav'
 import { WeeklyReport } from '@/components/WeeklyReport'
+import { useNotificationsStore } from '@/store/notificationsStore'
 
 export function AppShell() {
   const { sidebarCollapsed, mobileMenuOpen, setMobileMenuOpen } = useUIStore()
   const isDesktop = useIsDesktop()
   const { pathname } = useLocation()
+  const { startListening, stopListening } = useNotificationsStore()
+
+  useEffect(() => {
+    startListening()
+    return () => stopListening()
+  }, [])
 
   useEffect(() => {
     setMobileMenuOpen(false)

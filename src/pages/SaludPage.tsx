@@ -10,6 +10,7 @@ import {
   calcSleepTotal,
 } from '@/services/health.service'
 import { patchContext } from '@/services/context.service'
+import { notifyOnce } from '@/services/notification.service'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -240,6 +241,12 @@ export function SaludPage() {
       })
       const updated = await getHealthData(todayStr)
       setTodayData(updated)
+      if (steps !== undefined && steps >= STEPS_GOAL)
+        notifyOnce('steps_goal', {
+          title: '👟 ¡10.000 pasos conseguidos!',
+          body: `${steps.toLocaleString('es-ES')} pasos hoy — objetivo alcanzado`,
+          type: 'achievement',
+        })
       setSaveMsg('¡Guardado!')
       setTimeout(() => setSaveMsg(null), 3000)
     } catch {

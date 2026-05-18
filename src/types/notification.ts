@@ -7,4 +7,5 @@ export interface Notification {
   createdAt: Date
   read: boolean
   type: NotificationType
+  key?: string
 }

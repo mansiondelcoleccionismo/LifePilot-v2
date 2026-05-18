@@ -18,6 +18,7 @@ import {
   loadPatternData, type PatternData, type FrequentFood, type FoodCombo,
 } from '@/services/nutrition-patterns.service'
 import type { UserProfile } from '@/types/profile'
+import { notifyOnce } from '@/services/notification.service'
 
 // ─── Meal config ─────────────────────────────────────────────────────────────
 const MEALS: Array<{ value: MealType; label: string; emoji: string; hours: [number, number] }> = [
@@ -1059,6 +1060,27 @@ export function NutricionPage() {
       { kcal: 0, protein: 0, carbs: 0, fat: 0 }), [entries])
 
   const kcalPct = target.kcal > 0 ? Math.min(100, (totals.kcal / target.kcal) * 100) : 0
+
+  // ── Goal notifications ─────────────────────────────────────────────────────
+  const prevGoalRef = useRef({ protein: false, kcal: false })
+  useEffect(() => {
+    if (!todayBool) return
+    const proteinHit = target.protein > 0 && totals.protein >= target.protein * 0.95
+    const kcalHit    = target.kcal > 0 && totals.kcal >= target.kcal * 0.90 && totals.kcal <= target.kcal * 1.15
+    if (proteinHit && !prevGoalRef.current.protein)
+      notifyOnce('protein_goal', {
+        title: '🥩 Objetivo de proteína alcanzado',
+        body: `${Math.round(totals.protein)}g de ${target.protein}g objetivo — ¡Bien!`,
+        type: 'achievement',
+      })
+    if (kcalHit && !prevGoalRef.current.kcal)
+      notifyOnce('kcal_goal', {
+        title: '🔥 Objetivo calórico en rango',
+        body: `${Math.round(totals.kcal)} kcal de ${target.kcal} objetivo`,
+        type: 'achievement',
+      })
+    prevGoalRef.current = { protein: proteinHit, kcal: kcalHit }
+  }, [totals.protein, totals.kcal, target.protein, target.kcal, todayBool])
 
   // ── Search ────────────────────────────────────────────────────────────────
   const filteredFavs = useMemo(() => {
