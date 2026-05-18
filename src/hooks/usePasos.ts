@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot, orderBy, query, limit } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { OWNER_ID } from '@/services/apple-health.service'
 
 export interface PasosDia {
   fecha: string
   pasos: number
-  fuente?: string
+  updatedAt?: unknown
 }
 
 interface UsePasosResult {
@@ -28,8 +27,9 @@ export function usePasos(): UsePasosResult {
       return d.toISOString().slice(0, 10)
     })()
 
+    // Lee de la colección raíz "pasos" donde escribe la Cloud Function
     const q = query(
-      collection(db, 'usuarios', OWNER_ID, 'pasos'),
+      collection(db, 'pasos'),
       orderBy('fecha', 'desc'),
       limit(30),
     )
