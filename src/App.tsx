@@ -18,6 +18,7 @@ import { MedicacionPage } from '@/pages/MedicacionPage'
 import { PatrimonioPage } from '@/pages/PatrimonioPage'
 import { PerfilPage } from '@/pages/PerfilPage'
 import { SaludPesoPage } from '@/pages/SaludPesoPage'
+import { SaludPage } from '@/pages/SaludPage'
 import { ProgresPage } from '@/pages/ProgresPage'
 
 export default function App() {
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="perfil"     element={<PerfilPage />} />
           <Route path="salud/peso" element={<SaludPesoPage />} />
           <Route path="progreso"   element={<ProgresPage />} />
+          <Route path="salud"      element={<SaludPage />} />
         </Route>
       </Routes>
     </HashRouter>

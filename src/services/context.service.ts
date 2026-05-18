@@ -29,6 +29,11 @@ export interface GlobalContext {
     eventsToday:         string[]
     tasksCompleted:      number
     tasksPending:        number
+    todaySteps?:         number
+    todaySleepHours?:    number
+    todaySleepQuality?:  string
+    weekStepsAvg?:       number
+    weekSleepAvg?:       number
   }
   week: {
     trainingsCompleted:   number
@@ -73,6 +78,11 @@ export type ContextPatch = Partial<{
   proteinDeficitOnRestDays: boolean
   streakCurrent:       number
   weightTrend:         'bajando' | 'subiendo' | 'estable' | 'sin_datos'
+  todaySteps:          number
+  todaySleepHours:     number
+  todaySleepQuality:   string
+  weekStepsAvg:        number
+  weekSleepAvg:        number
 }>
 
 // ── Module-level state ────────────────────────────────────────────────────────
@@ -176,6 +186,11 @@ export function patchContext(patch: ContextPatch): void {
   if (patch.proteinDeficitOnRestDays !== undefined) p.proteinDeficitOnRestDays = patch.proteinDeficitOnRestDays
   if (patch.streakCurrent           !== undefined) p.streakCurrent = patch.streakCurrent
   if (patch.weightTrend             !== undefined) p.weightTrend = patch.weightTrend
+  if (patch.todaySteps              !== undefined) t.todaySteps = patch.todaySteps
+  if (patch.todaySleepHours         !== undefined) t.todaySleepHours = patch.todaySleepHours
+  if (patch.todaySleepQuality       !== undefined) t.todaySleepQuality = patch.todaySleepQuality
+  if (patch.weekStepsAvg            !== undefined) t.weekStepsAvg = patch.weekStepsAvg
+  if (patch.weekSleepAvg            !== undefined) t.weekSleepAvg = patch.weekSleepAvg
 
   // Recalculate derived fields
   t.macrosCompliance = t.kcalTarget > 0
@@ -222,6 +237,17 @@ export function getContextForAI(): string {
   if (pt.bestMoodDay)  lines.push(`Mejor día de ánimo histórico: ${pt.bestMoodDay}.`)
   if (pt.streakCurrent > 0) lines.push(`Racha de registros: ${pt.streakCurrent} días.`)
   if (pt.proteinDeficitOnRestDays) lines.push(`Déficit de proteína en días de descanso detectado.`)
+
+  if (t.todaySteps !== undefined)
+    lines.push(`Pasos hoy: ${t.todaySteps.toLocaleString('es-ES')} (objetivo: 10.000).`)
+  if (t.todaySleepHours !== undefined) {
+    const qualStr = t.todaySleepQuality ? ` - calidad ${t.todaySleepQuality}` : ''
+    lines.push(`Sueño anoche: ${t.todaySleepHours.toFixed(1)}h${qualStr}.`)
+  }
+  if (t.weekStepsAvg !== undefined)
+    lines.push(`Pasos promedio últimos 7 días: ${t.weekStepsAvg.toLocaleString('es-ES')}.`)
+  if (t.weekSleepAvg !== undefined)
+    lines.push(`Sueño promedio últimos 7 días: ${t.weekSleepAvg.toFixed(1)}h.`)
 
   return lines.join(' ')
 }

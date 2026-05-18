@@ -17,6 +17,7 @@ import {
   fetchICalEvents, getTodayICalEvents, getLastSyncTime, type ICalEvent,
 } from '@/services/ical.service'
 import { callAI, hasAnyAIKey } from '@/services/ai.service'
+import { getHealthData, getLastNDays, calcSleepTotal, type HealthData } from '@/services/health.service'
 import { checkMissedReminders, type Reminder } from '@/services/notifications.service'
 import { getWeatherToday, type WeatherData } from '@/services/weather.service'
 import { loadProfile, getDayKind, getTargetForDay } from '@/services/metabolic.service'
@@ -118,6 +119,7 @@ export function InicioPage() {
   const [weightSaved, setWeightSaved]           = useState(false)
   const [missedReminders, setMissedReminders]   = useState<Reminder[]>([])
   const [dismissedMissed, setDismissedMissed]   = useState<Set<string>>(new Set())
+  const [todayHealth, setTodayHealth]           = useState<HealthData | null>(null)
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const pendingTasks = useMemo(() => tasks.filter(t => !t.completed), [tasks])
@@ -163,8 +165,15 @@ export function InicioPage() {
     if (lastWeight) pills.push({ emoji: '⚖️', text: `${lastWeight.weight} kg` })
     if (streak > 0) pills.push({ emoji: '🔥', text: `Racha ${streak} días` })
     if (todayMood)  pills.push({ emoji: MOOD_EMOJI[todayMood] ?? '😊', text: 'Mood hoy' })
+    if (todayHealth?.steps !== undefined)
+      pills.push({ emoji: '👟', text: `${todayHealth.steps.toLocaleString('es-ES')} pasos` })
+    if (todayHealth?.sleepHours !== undefined) {
+      const h = todayHealth.sleepHours
+      const m = todayHealth.sleepMinutes
+      pills.push({ emoji: '🌙', text: `${h}h${m ? ` ${m}m` : ''} sueño` })
+    }
     return pills
-  }, [lastWeight, streak, todayMood])
+  }, [lastWeight, streak, todayMood, todayHealth])
 
   // Show quick weight card on Mon/Thu if no weight logged in last 7 days
   const showWeightCard = useMemo(() => {
@@ -186,6 +195,25 @@ export function InicioPage() {
     const u2 = subscribeMedications(setMedications)
     const u3 = subscribeDayLogs(todayStr, setMedLogs)
     const u4 = subscribeDiaryEntries(monthKey, setDiaryEntries)
+
+    // Load today's health data + patch AI context
+    Promise.all([getHealthData(todayStr), getLastNDays(7)]).then(([today, week]) => {
+      setTodayHealth(today)
+      const withSteps = week.filter(d => d.steps !== undefined)
+      const withSleep = week.filter(d => d.sleepHours !== undefined)
+      patchContext({
+        ...(today?.steps       !== undefined ? { todaySteps: today.steps }                : {}),
+        ...(today?.sleepHours  !== undefined ? { todaySleepHours: calcSleepTotal(today) } : {}),
+        ...(today?.sleepQuality              ? { todaySleepQuality: today.sleepQuality }  : {}),
+        ...(withSteps.length ? {
+          weekStepsAvg: Math.round(withSteps.reduce((s, d) => s + (d.steps ?? 0), 0) / withSteps.length),
+        } : {}),
+        ...(withSleep.length ? {
+          weekSleepAvg: parseFloat((withSleep.reduce((s, d) => s + calcSleepTotal(d), 0) / withSleep.length).toFixed(1)),
+        } : {}),
+      })
+    })
+
     return () => { u1(); u2(); u3(); u4() }
   }, [todayStr, monthKey, loadWeights])
 

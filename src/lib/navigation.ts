@@ -1,4 +1,4 @@
-import { Home, Salad, Dumbbell, CheckSquare, CalendarDays, Pill, Clapperboard, Baby, Map, BookOpen, NotebookPen, Sparkles, Settings, TrendingUp, Activity } from 'lucide-react'
+import { Home, Salad, Dumbbell, CheckSquare, CalendarDays, Pill, Clapperboard, Baby, Map, BookOpen, NotebookPen, Sparkles, Settings, TrendingUp, Activity, Heart } from 'lucide-react'
 
 export const NAV_GROUPS = [
   {
@@ -12,6 +12,7 @@ export const NAV_GROUPS = [
       { id: 'calendario',  label: 'Calendario',  icon: CalendarDays, path: '/calendario', mobileVisible: true },
       { id: 'medicacion',  label: 'Medicación',  icon: Pill,         path: '/medicacion' },
       { id: 'progreso',    label: 'Progreso',    icon: Activity,     path: '/progreso' },
+      { id: 'salud',      label: 'Salud',       icon: Heart,        path: '/salud' },
     ],
   },
   {
