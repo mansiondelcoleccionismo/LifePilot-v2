@@ -190,6 +190,34 @@ export function checkMissedReminders(): Reminder[] {
   return missed
 }
 
+// ── Missed → Firebase notifications ──────────────────────────────────────────
+
+const REMINDER_URLS: Record<string, string> = {
+  med_morning:     '/medicacion',
+  med_night:       '/medicacion',
+  padel_lunes:     '/calendario',
+  padel_miercoles: '/calendario',
+  diary:           '/diario',
+  kira:            '/kira',
+  metrics:         '/salud/peso',
+}
+
+export async function checkAndNotifyMissedReminders(): Promise<void> {
+  const missed = checkMissedReminders()
+  if (!missed.length) return
+  const { notifyOnce } = await import('./notification.service')
+  await Promise.allSettled(
+    missed.map(r =>
+      notifyOnce(`missed_${r.id}`, {
+        title: r.title,
+        body: r.body,
+        type: 'reminder',
+        accionUrl: REMINDER_URLS[r.id],
+      }),
+    ),
+  )
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 export function cancelAllNotifications() {
   timers.forEach(clearTimeout)

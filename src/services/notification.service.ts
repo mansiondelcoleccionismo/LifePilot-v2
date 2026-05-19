@@ -1,6 +1,6 @@
 import { db } from '@/lib/firebase'
 import {
-  collection, addDoc, getDocs, doc, updateDoc,
+  collection, addDoc, getDocs, doc, updateDoc, deleteDoc,
   query, orderBy, limit, where, Timestamp, onSnapshot,
 } from 'firebase/firestore'
 import type { NotificationType } from '@/types/notification'
@@ -16,6 +16,7 @@ export interface NotificationDoc {
   createdAt: Date
   read: boolean
   key: string
+  accionUrl?: string
 }
 
 export function subscribeNotifications(
@@ -39,7 +40,7 @@ export function subscribeNotifications(
 /** Creates a notification at most once per key per day. Fire-and-forget. */
 export async function notifyOnce(
   key: string,
-  data: { title: string; body: string; type: NotificationType },
+  data: { title: string; body: string; type: NotificationType; accionUrl?: string },
 ): Promise<void> {
   try {
     const dayKey = `${key}_${today()}`
@@ -57,4 +58,25 @@ export async function markNotifRead(id: string): Promise<void> {
 
 export async function markAllNotifsRead(ids: string[]): Promise<void> {
   await Promise.all(ids.map(markNotifRead))
+}
+
+/** Auto-cleanup: read >7d and unread >30d. Run once per session. */
+let _cleanupDone = false
+export async function cleanupOldNotifications(): Promise<void> {
+  if (_cleanupDone) return
+  _cleanupDone = true
+  try {
+    const now = new Date()
+    const cutRead   = new Date(now); cutRead.setDate(now.getDate() - 7)
+    const cutUnread = new Date(now); cutUnread.setDate(now.getDate() - 30)
+
+    const snap = await getDocs(query(COL, orderBy('createdAt', 'asc'), limit(200)))
+    const toDelete = snap.docs.filter(d => {
+      const data = d.data()
+      const ts = (data['createdAt'] as Timestamp).toDate()
+      if (data['read']) return ts < cutRead
+      return ts < cutUnread
+    })
+    await Promise.all(toDelete.map(d => deleteDoc(doc(db, 'notifications', d.id))))
+  } catch { /* silent */ }
 }

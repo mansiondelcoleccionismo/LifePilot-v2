@@ -191,7 +191,13 @@ export function Topbar() {
                     notifications.map((n) => (
                       <button
                         key={n.id}
-                        onClick={() => markAsRead(n.id)}
+                        onClick={() => {
+                          markAsRead(n.id)
+                          if ((n as { accionUrl?: string }).accionUrl) {
+                            navigate((n as { accionUrl?: string }).accionUrl!)
+                            setNotifOpen(false)
+                          }
+                        }}
                         className={`w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-(--hover-bg) transition border-b border-(--border) last:border-0 ${n.read ? 'opacity-50' : ''}`}
                       >
                         <NotifIcon type={n.type} />

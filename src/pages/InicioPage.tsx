@@ -20,7 +20,7 @@ import {
 import { callAI, hasAnyAIKey } from '@/services/ai.service'
 import { getHealthData, getLastNDays, calcSleepTotal, type HealthData } from '@/services/health.service'
 import { getAppleSteps } from '@/services/apple-health.service'
-import { checkMissedReminders, type Reminder } from '@/services/notifications.service'
+import { checkAndNotifyMissedReminders } from '@/services/notifications.service'
 import { getWeatherToday, type WeatherData } from '@/services/weather.service'
 import { loadProfile, getDayKind, getTargetForDay } from '@/services/metabolic.service'
 import { subscribeDiaryEntries } from '@/services/diary.service'
@@ -124,8 +124,6 @@ export function InicioPage() {
   const [quickWeight, setQuickWeight]           = useState('')
   const [savingWeight, setSavingWeight]         = useState(false)
   const [weightSaved, setWeightSaved]           = useState(false)
-  const [missedReminders, setMissedReminders]   = useState<Reminder[]>([])
-  const [dismissedMissed, setDismissedMissed]   = useState<Set<string>>(new Set())
   const [todayHealth, setTodayHealth]           = useState<HealthData | null>(null)
   const [appleSteps,  setAppleSteps]            = useState<number | null>(null)
   const [weekHealth,  setWeekHealth]            = useState<HealthData[]>([])
@@ -197,8 +195,7 @@ export function InicioPage() {
 
   // ── Effects ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    setMissedReminders(checkMissedReminders())
-    // Weekly report: generate if missing, show badge if unread
+    checkAndNotifyMissedReminders().catch(() => {})
     checkAndGenerateWeeklyReport()
     getUnreadReportCount().then(setUnreadReports).catch(() => {})
   }, [])
@@ -314,26 +311,6 @@ export function InicioPage() {
 
   return (
     <div className="px-4 py-6 pb-28 md:px-6 lg:px-8 max-w-5xl mx-auto space-y-5">
-
-      {/* Missed reminder banners */}
-      {missedReminders
-        .filter(r => !dismissedMissed.has(r.id))
-        .map(r => (
-          <div
-            key={r.id}
-            className="rounded-2xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 flex items-center justify-between gap-3"
-          >
-            <p className="text-sm text-amber-200/90">
-              <span className="font-semibold">⏰ Recordatorio perdido:</span> {r.title} — {r.body}
-            </p>
-            <button
-              onClick={() => setDismissedMissed(prev => new Set([...prev, r.id]))}
-              className="shrink-0 rounded-xl bg-amber-500/20 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/30 transition"
-            >
-              Entendido
-            </button>
-          </div>
-        ))}
 
       {/* Weekly report banner */}
       {unreadReports > 0 && !dismissedReport && (

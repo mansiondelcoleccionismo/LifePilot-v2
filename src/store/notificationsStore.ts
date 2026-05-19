@@ -4,6 +4,7 @@ import {
   subscribeNotifications,
   markNotifRead,
   markAllNotifsRead,
+  cleanupOldNotifications,
 } from '@/services/notification.service'
 
 interface NotificationsState {
@@ -23,6 +24,7 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
     if (get()._unsubscribe) return
     const unsub = subscribeNotifications((docs) => set({ notifications: docs }))
     set({ _unsubscribe: unsub })
+    cleanupOldNotifications().catch(() => {})
   },
 
   stopListening: () => {

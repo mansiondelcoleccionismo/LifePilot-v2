@@ -8,4 +8,5 @@ export interface Notification {
   read: boolean
   type: NotificationType
   key?: string
+  accionUrl?: string
 }
