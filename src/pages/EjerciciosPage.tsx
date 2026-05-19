@@ -502,7 +502,7 @@ async function saveHandgripStartDate(date: string) {
 // ─── AI coach ─────────────────────────────────────────────────────────────────
 async function callGemini(prompt: string): Promise<string> {
   if (!hasAnyAIKey()) throw new Error('Sin clave de IA. Configúrala en Ajustes.')
-  return callAI(prompt)
+  return callAI(prompt, undefined, true, 1000, undefined, 60 * 60_000)
 }
 
 // ─── Progression detection ────────────────────────────────────────────────────

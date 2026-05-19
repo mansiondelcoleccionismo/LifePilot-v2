@@ -407,7 +407,7 @@ Responde SOLO con JSON válido sin texto ni markdown:
 {"saludo":"frase breve de bienvenida","resumen":"2-3 frases analizando la semana con los datos reales","entrenamiento":{"completados":${stats.trainDays},"total":${profile.trainingDays?.length ?? 4},"destacado":"logro o nota basada en datos reales"},"nutricion":{"cumplimiento":${stats.proteinAvg > 0 ? Math.round((stats.proteinAvg / proteinTarget) * 100) : 0},"proteina_media":${stats.proteinAvg},"mejor_dia":"${stats.kcalAvg > 0 ? 'Ver datos' : 'Sin datos'}","peor_dia":"${stats.kcalAvg > 0 ? 'Ver datos' : 'Sin datos'}"},"bienestar":{"mood_promedio":${stats.moodAvg || 3},"mejor_dia":"${stats.moodBestDay}","observacion":"observación basada en el mood real"},"recomendaciones":["recomendación concreta 1","recomendación concreta 2","recomendación concreta 3"]}`
 
       // ── 3. Call AI with skip context (we provide all data) ─────────────────
-      const raw = await callAI(prompt, undefined, true, 1200)
+      const raw = await callAI(prompt, undefined, true, 1200, undefined, 7 * 24 * 60 * 60_000)
       localStorage.setItem(LAST_REPORT_KEY, getWeekKey())
 
       const parsed = extractJson(raw)

@@ -43,7 +43,7 @@ export function SenalDelDia() {
     }
     setLoading(true)
     try {
-      const text = await callAI(PROMPT, undefined, false, 300)
+      const text = await callAI(PROMPT, undefined, false, 300, undefined, 24 * 60 * 60_000)
       const clean = text.trim()
       if (clean) { setSignal(clean); writeCache(todayStr, clean) }
     } catch { /* silent */ }

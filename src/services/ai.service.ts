@@ -22,6 +22,32 @@ const GROQ_KEY_SLOTS = [
 const COOLDOWNS_KEY = 'lifepilot_ai_cooldowns'
 const COOLDOWN_MS   = 60_000
 
+// ── Response cache ────────────────────────────────────────────────────────────
+const CACHE_PREFIX = 'lifepilot_ai_cache_'
+
+function cacheGet(key: string): string | null {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + key)
+    if (!raw) return null
+    const { value, expiry } = JSON.parse(raw) as { value: string; expiry: number }
+    if (Date.now() > expiry) { localStorage.removeItem(CACHE_PREFIX + key); return null }
+    return value
+  } catch { return null }
+}
+
+function cacheSet(key: string, value: string, ttlMs: number) {
+  try {
+    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ value, expiry: Date.now() + ttlMs }))
+  } catch {} // localStorage lleno — ignorar
+}
+
+function hashStr(s: string): string {
+  let h = 0
+  for (let i = 0; i < Math.min(s.length, 500); i++)
+    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0
+  return Math.abs(h).toString(36)
+}
+
 // ── Key readers ───────────────────────────────────────────────────────────────
 function getGeminiKeys(): string[] {
   const numbered = GEMINI_KEY_SLOTS
@@ -184,7 +210,14 @@ export async function callAI(
   skipContext = false,
   maxTokens = 1000,
   modulo?: string,
+  cacheTTL = 0,
 ): Promise<string> {
+  // Cache hit — antes de construir el prompt completo
+  if (cacheTTL > 0 && !imageData) {
+    const hit = cacheGet(hashStr(prompt))
+    if (hit) return hit
+  }
+
   let fullPrompt = prompt
   if (!skipContext) {
     const profileCtx = buildAIContext()
@@ -203,6 +236,7 @@ export async function callAI(
   }
   const _save = (response: string) => {
     if (modulo) quickSaveMemory(modulo, prompt, response).catch(() => {})
+    if (cacheTTL > 0 && !imageData && response) cacheSet(hashStr(prompt), response, cacheTTL)
     return response
   }
 

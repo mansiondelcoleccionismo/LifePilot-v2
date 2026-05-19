@@ -292,7 +292,7 @@ export function InicioPage() {
         ` Proteína consumida: ${Math.round(todayNutrition.protein)}g de ${proteinTarget}g objetivo.` +
         ` Tareas pendientes: ${pendingTasks.length}.` +
         ` Escribe 2-3 frases de briefing motivador y concreto para Daniel. Solo el texto, sin markdown.`
-      const text = await callAI(prompt)
+      const text = await callAI(prompt, undefined, false, 1000, undefined, 24 * 60 * 60_000)
       setBriefing(text.trim())
     } catch { /* silent */ }
     finally { setBriefingLoading(false) }
