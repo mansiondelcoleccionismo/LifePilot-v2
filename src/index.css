@@ -85,22 +85,18 @@ select {
   font-size: 16px !important;
 }
 
-/* ===== SCROLLBAR ===== */
-html,
-body,
-* {
-  scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
+/* ===== SCROLLBAR — body nunca scrollea, solo contenedores internos ===== */
+html, body {
+  height: 100%;
+  overflow: hidden;
 }
 
-html::-webkit-scrollbar,
-body::-webkit-scrollbar,
-*::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
-
-/* Clase utilitaria por si los estilos globales no alcanzan */
-.no-scrollbar { scrollbar-width: none !important; -ms-overflow-style: none !important; }
-.no-scrollbar::-webkit-scrollbar { display: none !important; width: 0 !important; }
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}

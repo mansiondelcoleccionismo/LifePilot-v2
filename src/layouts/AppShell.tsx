@@ -84,12 +84,12 @@ export function AppShell() {
 
       {/* Contenido principal */}
       <div
-        className="flex flex-col min-h-dvh transition-[padding-left] duration-280"
+        className="flex flex-col h-dvh transition-[padding-left] duration-280"
         style={{ paddingLeft: isDesktop ? sidebarWidth : 0 }}
       >
         <Topbar />
 
-        <main className="flex-1 pt-14 pb-24 lg:pb-0">
+        <main className="no-scrollbar flex-1 overflow-y-auto pt-14 pb-24 lg:pb-0">
           <AnimatePresence mode="wait">
             <motion.div
               key={pathname}
