@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { RefreshCw, Loader2, ChevronRight, Check, Scale } from 'lucide-react'
 import { useAuthStore } from '@/store/auth.store'
 import { useTasks } from '@/hooks/useTasks'
+import { usePasos } from '@/hooks/usePasos'
 import { useWeights } from '@/features/health/useWeights'
 import { subscribeNutritionEntries } from '@/services/nutrition.service'
 import { HydrationWidget } from '@/components/HydrationWidget'
@@ -23,6 +24,9 @@ import { checkMissedReminders, type Reminder } from '@/services/notifications.se
 import { getWeatherToday, type WeatherData } from '@/services/weather.service'
 import { loadProfile, getDayKind, getTargetForDay } from '@/services/metabolic.service'
 import { subscribeDiaryEntries } from '@/services/diary.service'
+import { HoyEnUnVistazo } from '@/components/inicio/HoyEnUnVistazo'
+import { SenalDelDia } from '@/components/inicio/SenalDelDia'
+import { TendenciaSemanal } from '@/components/inicio/TendenciaSemanal'
 import type { FoodEntry } from '@/types/nutrition'
 import type { Medication, MedicationLog } from '@/types/medication'
 import type { DiaryEntry } from '@/types/diary'
@@ -102,6 +106,7 @@ export function InicioPage() {
 
   // ── Firebase / async state ────────────────────────────────────────────────
   const { tasks, loading: tasksLoading } = useTasks()
+  const { pasosHoy, historicoSemanal } = usePasos()
   const { loadWeights, lastWeight, weights, addWeight } = useWeights()
 
   const [nutritionEntries, setNutritionEntries] = useState<FoodEntry[]>([])
@@ -122,6 +127,7 @@ export function InicioPage() {
   const [dismissedMissed, setDismissedMissed]   = useState<Set<string>>(new Set())
   const [todayHealth, setTodayHealth]           = useState<HealthData | null>(null)
   const [appleSteps,  setAppleSteps]            = useState<number | null>(null)
+  const [weekHealth,  setWeekHealth]            = useState<HealthData[]>([])
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const pendingTasks = useMemo(() => tasks.filter(t => !t.completed), [tasks])
@@ -203,6 +209,7 @@ export function InicioPage() {
     Promise.all([getHealthData(todayStr), getLastNDays(7), getAppleSteps(todayStr)]).then(([today, week, ahSteps]) => {
       setTodayHealth(today)
       setAppleSteps(ahSteps)
+      setWeekHealth(week)
       const withSteps = week.filter(d => d.steps !== undefined)
       const withSleep = week.filter(d => d.sleepHours !== undefined)
       const bestSteps = ahSteps ?? today?.steps
@@ -391,7 +398,26 @@ export function InicioPage() {
       </motion.div>
 
       {/* ══════════════════════════════════════════════════════════════════
-          ZONE 2 — ACCIÓN INMEDIATA
+          ZONE 2 — HOY EN UN VISTAZO + SEÑAL IA
+          ══════════════════════════════════════════════════════════════ */}
+      <HoyEnUnVistazo
+        pasosHoy={pasosHoy}
+        historicoSemanal={historicoSemanal}
+        caloriasHoy={todayNutrition.calories}
+        kcalTarget={kcalTarget}
+        proteinaHoy={todayNutrition.protein}
+        proteinaTarget={proteinTarget}
+        todayMood={todayMood}
+        diaryEntries={diaryEntries}
+        profile={profile}
+        dayKind={dayKind}
+        todayStr={todayStr}
+      />
+
+      <SenalDelDia />
+
+      {/* ══════════════════════════════════════════════════════════════════
+          ZONE 3 — ACCIÓN INMEDIATA
           ══════════════════════════════════════════════════════════════ */}
       <motion.div
         initial={{ opacity: 0, y: 14 }}
@@ -688,6 +714,15 @@ export function InicioPage() {
           </div>
         </motion.div>
       )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          ZONE 5 — TENDENCIA 7 DÍAS
+          ══════════════════════════════════════════════════════════════ */}
+      <TendenciaSemanal
+        historicoSemanal={historicoSemanal}
+        diaryEntries={diaryEntries}
+        weekHealth={weekHealth}
+      />
 
     </div>
   )
