@@ -13,7 +13,7 @@ export function SidebarContent({ collapsed = false }: { collapsed?: boolean }) {
   const { pending } = useTasks()
 
   return (
-    <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2">
+    <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none]">
       {NAV_GROUPS.map((group) => (
         <div key={group.id} className="mb-1">
           <AnimatePresence>

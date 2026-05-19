@@ -182,7 +182,7 @@ export function Topbar() {
                 </div>
 
                 {/* List */}
-                <div className="max-h-85 overflow-y-auto">
+                <div className="max-h-85 overflow-y-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none]">
                   {notifications.length === 0 ? (
                     <div className="py-12 text-center text-sm text-(--text-muted)">
                       No tienes notificaciones
