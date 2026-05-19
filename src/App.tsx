@@ -20,6 +20,7 @@ import { PerfilPage } from '@/pages/PerfilPage'
 import { SaludPesoPage } from '@/pages/SaludPesoPage'
 import { SaludPage } from '@/pages/SaludPage'
 import { ProgresPage } from '@/pages/ProgresPage'
+import { PatronesPage } from '@/pages/PatronesPage'
 
 export default function App() {
   const { isLoggedIn } = useAuthStore()
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="salud/peso" element={<SaludPesoPage />} />
           <Route path="progreso"   element={<ProgresPage />} />
           <Route path="salud"      element={<SaludPage />} />
+          <Route path="patrones"   element={<PatronesPage />} />
         </Route>
       </Routes>
     </HashRouter>
