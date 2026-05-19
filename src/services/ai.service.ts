@@ -1,6 +1,7 @@
 import type { AIMessage } from '@/types/ai'
 import { buildAIContext } from './ai-memory.service'
 import { buildGlobalContext, formatContextForAI } from './globalContext.service'
+import { getRecentMemories, formatMemoriesForPrompt, quickSaveMemory } from './aiMemory.service'
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 const LEGACY_GEMINI_KEY = 'lifepilot_gemini_key'
@@ -182,6 +183,7 @@ export async function callAI(
   imageData?: { data: string; mimeType: string },
   skipContext = false,
   maxTokens = 1000,
+  modulo?: string,
 ): Promise<string> {
   let fullPrompt = prompt
   if (!skipContext) {
@@ -192,13 +194,25 @@ export async function callAI(
       : profileCtx
     fullPrompt = combined ? combined + prompt : prompt
   }
+
+  // Inject recent module memories if modulo is provided
+  if (modulo) {
+    const memories = await getRecentMemories(modulo, 3).catch(() => [])
+    const memCtx = formatMemoriesForPrompt(memories)
+    if (memCtx) fullPrompt = memCtx + fullPrompt
+  }
+  const _save = (response: string) => {
+    if (modulo) quickSaveMemory(modulo, prompt, response).catch(() => {})
+    return response
+  }
+
   // Try all Gemini keys first (supports images)
   const geminiKeys = getGeminiKeys()
   for (let i = 0; i < geminiKeys.length; i++) {
     const keyId = `gemini_${i}`
     if (isOnCooldown(keyId)) continue
     try {
-      return await callGemini(geminiKeys[i], fullPrompt, imageData, maxTokens)
+      return _save(await callGemini(geminiKeys[i], fullPrompt, imageData, maxTokens))
     } catch (err) {
       if (err instanceof RateLimitError) { setCooldown(keyId); continue }
       throw err
@@ -212,7 +226,7 @@ export async function callAI(
       const keyId = `groq_${i}`
       if (isOnCooldown(keyId)) continue
       try {
-        return await callGroq(groqKeys[i], fullPrompt, maxTokens)
+        return _save(await callGroq(groqKeys[i], fullPrompt, maxTokens))
       } catch (err) {
         if (err instanceof RateLimitError) { setCooldown(keyId); continue }
         throw err

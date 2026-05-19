@@ -130,8 +130,8 @@ export async function analyzePatterns(days = 30): Promise<PatternResult> {
     weekdayMoods,
     weeklyData,
     insights,
-    hasEnoughData: daysWithMood >= 14,
-    daysNeeded: Math.max(0, 14 - daysWithMood),
+    hasEnoughData: daysWithMood >= 7,
+    daysNeeded: Math.max(0, 7 - daysWithMood),
   }
 
   _cache = { key: cacheKey, result, ts: Date.now() }

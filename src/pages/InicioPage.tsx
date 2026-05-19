@@ -27,6 +27,7 @@ import { subscribeDiaryEntries } from '@/services/diary.service'
 import { HoyEnUnVistazo } from '@/components/inicio/HoyEnUnVistazo'
 import { SenalDelDia } from '@/components/inicio/SenalDelDia'
 import { TendenciaSemanal } from '@/components/inicio/TendenciaSemanal'
+import { checkAndGenerateWeeklyReport, getUnreadReportCount } from '@/services/weeklyReport.service'
 import type { FoodEntry } from '@/types/nutrition'
 import type { Medication, MedicationLog } from '@/types/medication'
 import type { DiaryEntry } from '@/types/diary'
@@ -128,6 +129,8 @@ export function InicioPage() {
   const [todayHealth, setTodayHealth]           = useState<HealthData | null>(null)
   const [appleSteps,  setAppleSteps]            = useState<number | null>(null)
   const [weekHealth,  setWeekHealth]            = useState<HealthData[]>([])
+  const [unreadReports, setUnreadReports]       = useState(0)
+  const [dismissedReport, setDismissedReport]   = useState(false)
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const pendingTasks = useMemo(() => tasks.filter(t => !t.completed), [tasks])
@@ -195,6 +198,9 @@ export function InicioPage() {
   // ── Effects ───────────────────────────────────────────────────────────────
   useEffect(() => {
     setMissedReminders(checkMissedReminders())
+    // Weekly report: generate if missing, show badge if unread
+    checkAndGenerateWeeklyReport()
+    getUnreadReportCount().then(setUnreadReports).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -328,6 +334,30 @@ export function InicioPage() {
             </button>
           </div>
         ))}
+
+      {/* Weekly report banner */}
+      {unreadReports > 0 && !dismissedReport && (
+        <div className="rounded-2xl bg-blue-500/10 border border-blue-500/20 px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-blue-200/90">
+            <span className="font-semibold">📊 Informe semanal listo</span>
+            {unreadReports > 1 ? ` · ${unreadReports} informes pendientes` : ''}
+          </p>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={() => navigate('/informe-semanal')}
+              className="rounded-xl bg-blue-500/25 px-3 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-500/35 transition"
+            >
+              Ver
+            </button>
+            <button
+              onClick={() => setDismissedReport(true)}
+              className="rounded-xl bg-white/8 px-3 py-1.5 text-xs text-white/40 hover:bg-white/12 transition"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       <PageHeader
         title={`${greeting}, ${firstName}.`}

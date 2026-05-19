@@ -20,7 +20,7 @@ function getPageInfo(pathname: string) {
     '/kira': '👧', '/planes': '📍', '/aprender': '🧠',
     '/diario': '📝', '/ia': '✨', '/ajustes': '⚙️',
     '/medicacion': '💊', '/patrimonio': '📈', '/perfil': '👤',
-    '/patrones': '🧠', '/progreso': '📈', '/salud': '❤️',
+    '/patrones': '🧠', '/progreso': '📈', '/salud': '❤️', '/informe-semanal': '📊',
   }
   if (pathname === '/') return { label: 'Inicio', emoji: '🏠' }
   const item = ALL_NAV_ITEMS.find((i) => i.path !== '/' && pathname.startsWith(i.path))
