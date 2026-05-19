@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
-import { collection, onSnapshot, orderBy, query, limit } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { ref, onValue, query, orderByKey, limitToLast } from 'firebase/database'
+import { rtdb } from '@/lib/firebase'
 
 export interface PasosDia {
   fecha: string
   pasos: number
-  updatedAt?: unknown
 }
 
 interface UsePasosResult {
@@ -21,27 +20,20 @@ export function usePasos(): UsePasosResult {
 
   useEffect(() => {
     const todayStr = new Date().toISOString().slice(0, 10)
-    const cutoff = (() => {
-      const d = new Date()
-      d.setDate(d.getDate() - 6)
-      return d.toISOString().slice(0, 10)
-    })()
 
-    // Lee de la colección raíz "pasos" donde escribe la Cloud Function
-    const q = query(
-      collection(db, 'pasos'),
-      orderBy('fecha', 'desc'),
-      limit(30),
-    )
+    const pasosQuery = query(ref(rtdb, 'pasos'), orderByKey(), limitToLast(7))
 
-    const unsub = onSnapshot(
-      q,
+    const unsub = onValue(
+      pasosQuery,
       (snap) => {
-        const all = snap.docs
-          .map((d) => d.data() as PasosDia)
-          .filter((d) => d.fecha >= cutoff)
-          .sort((a, b) => a.fecha.localeCompare(b.fecha))
-
+        const all: PasosDia[] = []
+        snap.forEach((child) => {
+          const val = child.val() as { Pasos?: number; Fecha?: string } | null
+          if (val && typeof val.Pasos === 'number') {
+            all.push({ fecha: child.key as string, pasos: val.Pasos })
+          }
+        })
+        // onValue with orderByKey returns ascending order
         setPasosHoy(all.find((d) => d.fecha === todayStr)?.pasos ?? null)
         setHistoricoSemanal(all)
         setLoading(false)
