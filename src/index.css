@@ -86,7 +86,21 @@ select {
 }
 
 /* ===== SCROLLBAR ===== */
-html, body { scrollbar-width: none !important; -ms-overflow-style: none !important; }
-html::-webkit-scrollbar, body::-webkit-scrollbar { display: none !important; width: 0 !important; }
-*::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
-* { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+html,
+body,
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Clase utilitaria por si los estilos globales no alcanzan */
+.no-scrollbar { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+.no-scrollbar::-webkit-scrollbar { display: none !important; width: 0 !important; }
