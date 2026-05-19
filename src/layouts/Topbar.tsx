@@ -7,7 +7,6 @@ import {
 } from 'lucide-react'
 import { useUIStore } from '@/store/ui.store'
 import { ALL_NAV_ITEMS } from '@/lib/navigation'
-import { useTasks } from '@/hooks/useTasks'
 import { useTheme } from '@/hooks/useTheme'
 import { useNotificationsStore } from '@/store/notificationsStore'
 import { useAuthStore } from '@/store/auth.store'
@@ -59,7 +58,6 @@ export function Topbar() {
   const navigate = useNavigate()
   const { setMobileMenuOpen, sidebarCollapsed } = useUIStore()
   const { label, emoji } = getPageInfo(pathname)
-  const { pending } = useTasks()
   const { isDark, toggle } = useTheme()
   const { notifications, markAsRead, markAllAsRead } = useNotificationsStore()
   const { user, logout } = useAuthStore()
@@ -153,15 +151,10 @@ export function Topbar() {
             className="relative w-8 h-8 flex items-center justify-center rounded-lg text-(--text-muted) hover:text-(--text-secondary) hover:bg-(--hover-bg) transition-colors"
           >
             <Bell size={15} />
-            {/* Red badge for pending tasks */}
-            {pending > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-4.5 h-4 rounded-full bg-red-500 text-[10px] font-semibold leading-4 text-white flex items-center justify-center px-1">
-                {pending}
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-4.5 h-4 rounded-full bg-blue-500 text-[10px] font-semibold leading-4 text-white flex items-center justify-center px-1">
+                {unreadCount}
               </span>
-            )}
-            {/* Blue dot for unread notifications (only when no task badge) */}
-            {pending === 0 && unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-blue-400" />
             )}
           </button>
 

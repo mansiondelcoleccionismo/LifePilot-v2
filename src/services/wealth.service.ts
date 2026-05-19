@@ -179,9 +179,10 @@ export async function syncFromSheets(): Promise<WealthAsset[]> {
       : tipoActivo === 'Cripto'     ? 'Cripto'
       : 'Renta Variable'
 
-    const newRef = doc(collection(db, WEALTH_ASSETS_COL))
+    const stableId = nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const newRef = doc(db, WEALTH_ASSETS_COL, stableId)
     batch.set(newRef, { nombre, plataforma, tipoProducto, tipoActivo, valor, updatedAt: serverTimestamp() })
-    newAssets.push({ id: newRef.id, nombre, plataforma, tipoProducto, tipoActivo, valor, updatedAt: new Date() })
+    newAssets.push({ id: stableId, nombre, plataforma, tipoProducto, tipoActivo, valor, updatedAt: new Date() })
   }
 
   // Commit atomically: deletes + adds happen together or not at all
@@ -308,11 +309,12 @@ export function calcBreakdown(assets: WealthAsset[]): PatrimonioBreakdown {
 }
 
 export async function savePatrimonioSnapshot(assets: WealthAsset[]): Promise<void> {
-  const date = new Date().toISOString().split('T')[0]
+  const monthKey = new Date().toISOString().slice(0, 7) // "2026-05" — overwrite same doc each month
+  const date = new Date().toISOString().slice(0, 10)
   const totalEUR = calcTotal(assets)
   const breakdown = calcBreakdown(assets)
   const assetData = assets.map(({ id: _id, updatedAt: _u, ...rest }) => rest)
-  await setDoc(doc(db, PATRIMONIO_COL, date), {
+  await setDoc(doc(db, PATRIMONIO_COL, monthKey), {
     date,
     assets: assetData,
     totalEUR,
