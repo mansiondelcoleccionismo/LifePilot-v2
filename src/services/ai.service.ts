@@ -1,5 +1,6 @@
 import type { AIMessage } from '@/types/ai'
 import { buildAIContext } from './ai-memory.service'
+import { buildGlobalContext, formatContextForAI } from './globalContext.service'
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 const LEGACY_GEMINI_KEY = 'lifepilot_gemini_key'
@@ -182,8 +183,15 @@ export async function callAI(
   skipContext = false,
   maxTokens = 1000,
 ): Promise<string> {
-  const context = skipContext ? '' : buildAIContext()
-  const fullPrompt = context ? context + prompt : prompt
+  let fullPrompt = prompt
+  if (!skipContext) {
+    const profileCtx = buildAIContext()
+    const liveCtx = await buildGlobalContext().then(formatContextForAI).catch(() => '')
+    const combined = liveCtx
+      ? `${liveCtx}\n\n${profileCtx}`
+      : profileCtx
+    fullPrompt = combined ? combined + prompt : prompt
+  }
   // Try all Gemini keys first (supports images)
   const geminiKeys = getGeminiKeys()
   for (let i = 0; i < geminiKeys.length; i++) {
